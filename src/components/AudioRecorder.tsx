@@ -369,7 +369,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
             <button
               type="button"
               onClick={() => setHandsFreeAutoPilot(!handsFreeAutoPilot)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 min-h-11 sm:min-h-0 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
                 handsFreeAutoPilot
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold"
                   : "bg-slate-50 text-slate-500 border-slate-200"
@@ -512,12 +512,12 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowUpload(true)}
-                  className="text-xs text-slate-500 hover:text-slate-800 underline transition-colors cursor-pointer"
+                  className="text-xs text-slate-500 hover:text-slate-800 underline transition-colors cursor-pointer min-h-11 sm:min-h-0 px-2"
                 >
                   Or upload an audio recording file
                 </button>
               ) : (
-                <label className="text-xs text-emerald-700 hover:text-emerald-800 cursor-pointer inline-flex items-center gap-1.5 font-semibold">
+                <label className="text-xs text-emerald-700 hover:text-emerald-800 cursor-pointer inline-flex items-center gap-1.5 font-semibold min-h-11 sm:min-h-0">
                   {isTranscribing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                   <span>
                     {isTranscribing
@@ -551,7 +551,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
               <button
                 type="button"
                 onClick={() => setShowCheatSheet(!showCheatSheet)}
-                className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1 transition-colors font-semibold cursor-pointer"
+                className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1 transition-colors font-semibold cursor-pointer min-h-11 sm:min-h-0"
               >
                 <Info className="w-3.5 h-3.5" />
                 <span>{showCheatSheet ? "Hide Guide" : "Dictation Tips"}</span>

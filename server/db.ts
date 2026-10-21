@@ -285,6 +285,7 @@ export interface QuickActivityLog {
   tags?: string[];
   meetingId?: string;
   meetingTitle?: string;
+  clientId?: string;
 }
 
 export const initialActivityLogs: QuickActivityLog[] = [

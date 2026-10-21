@@ -48,6 +48,12 @@ apiApp.get("/api/database", (_req: Request, res: Response) => {
 });
 
 apiApp.post("/api/activity-logs", (req: Request, res: Response) => {
+  // Offline retries resend the same clientId; return the stored log instead of duplicating it.
+  if (req.body.clientId) {
+    const existing = listRecords<QuickActivityLog>("activity_logs").find((l) => l.clientId === req.body.clientId);
+    if (existing) return res.json({ success: true, log: existing, duplicate: true });
+  }
+
   const now = new Date();
   const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
     now.getDate()
@@ -70,6 +76,7 @@ apiApp.post("/api/activity-logs", (req: Request, res: Response) => {
     tags: Array.isArray(req.body.tags) ? req.body.tags.map(String).slice(0, 20) : [],
     meetingId: req.body.meetingId,
     meetingTitle: req.body.meetingTitle,
+    clientId: req.body.clientId,
   };
 
   insertRecord("activity_logs", newLog);

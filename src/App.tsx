@@ -9,6 +9,7 @@ import { HomeView } from "./components/HomeView.tsx";
 import { UpcomingMeetings } from "./components/UpcomingMeetings.tsx";
 import { GlobalSearch } from "./components/GlobalSearch.tsx";
 import { ExportPanel } from "./components/ExportPanel.tsx";
+import { submitActivityLog, pendingActivityLogs, flushPendingActivityLogs } from "./services/offlineQueue.ts";
 import { useUpcomingMeetings, UpcomingMeeting, findActiveMeeting } from "./hooks/useUpcomingMeetings.ts";
 import { MeetingBriefingView, isBriefingSection } from "./components/MeetingBriefingView.tsx";
 import {
@@ -183,10 +184,12 @@ export default function App() {
         setListings(data.listings || []);
         setComps(data.comps || []);
         setMessagesLog(data.messagesLog || []);
-        setActivityLogs(data.activityLogs || []);
+        // Show notes and calls still waiting on this device alongside the server's.
+        setActivityLogs([...pendingActivityLogs(), ...(data.activityLogs || [])]);
       }
     } catch (err) {
       console.error("Failed to load brokerage database:", err);
+      setActivityLogs((prev) => (prev.length ? prev : pendingActivityLogs()));
     } finally {
       setIsLoadingDb(false);
     }
@@ -533,20 +536,40 @@ export default function App() {
   // Add Activity Log to DB
   const handleAddActivityLog = async (newLog: Partial<QuickActivityLog>) => {
     try {
-      const res = await fetch("/api/activity-logs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newLog),
-      });
-      const data = await res.json();
-      if (data.log) {
-        setActivityLogs((prev) => [data.log, ...prev]);
-        showNotification(`Logged activity: ${data.log.title}`);
-      }
+      const { log, queued } = await submitActivityLog(newLog);
+      setActivityLogs((prev) => [log, ...prev]);
+      showNotification(
+        queued ? `Saved on this device: ${log.title}. It will sync when you're back online.` : `Logged activity: ${log.title}`
+      );
     } catch (err) {
       console.error("Error creating activity log:", err);
+      showNotification("Could not save. Please try again.");
     }
   };
+
+  // Online/offline state; queued notes and calls sync when the connection returns.
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  useEffect(() => {
+    const sync = async () => {
+      const saved = await flushPendingActivityLogs();
+      if (saved.size > 0) {
+        setActivityLogs((prev) => prev.map((log) => saved.get(log.id) || log));
+        showNotification(`Synced ${saved.size} offline ${saved.size === 1 ? "item" : "items"}`);
+      }
+    };
+    const goOnline = () => {
+      setIsOnline(true);
+      sync();
+    };
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    sync();
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
 
   const pendingCommsCount = analysisResult
     ? analysisResult.communications.filter((c) => c.status !== "Delivered").length
@@ -556,7 +579,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-emerald-100 selection:text-emerald-900">
       {/* Toast Notification */}
       {notification && (
-        <div className="fixed bottom-24 left-4 right-4 sm:bottom-5 sm:right-auto z-50 bg-slate-900 border border-slate-800 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs animate-in fade-in slide-in-from-bottom-2">
+        <div className="fixed bottom-40 left-4 right-4 sm:bottom-5 sm:right-auto z-50 bg-slate-900 border border-slate-800 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs animate-in fade-in slide-in-from-bottom-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span className="font-semibold">{notification}</span>
         </div>
@@ -622,6 +645,11 @@ export default function App() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {!isOnline && (
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900" role="status">
+            You're offline. Notes and calls are saved on this device and sync when you reconnect.
+          </div>
+        )}
         {currentTab === "home" && (
           <HomeView
             activityLogs={activityLogs}
@@ -808,7 +836,7 @@ export default function App() {
       <QuickCapture contacts={contacts} activeMeeting={activeMeeting} onSaveLog={handleAddActivityLog} />
 
       {/* Footer */}
-      <footer className="mt-12 border-t border-slate-200 bg-white py-5 text-center text-xs text-slate-500">
+      <footer className="mt-12 border-t border-slate-200 bg-white pt-5 pb-40 sm:pb-5 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="font-bold text-slate-800">Broker Buddy</span>

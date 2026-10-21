@@ -77,6 +77,9 @@ export interface QuickActivityLog {
   tags?: string[];
   meetingId?: string;
   meetingTitle?: string;
+  // Client-only: id used to de-duplicate offline retries, and whether it is still queued on the device.
+  clientId?: string;
+  pendingSync?: boolean;
 }
 
 export interface FinancialTerms {

@@ -265,7 +265,7 @@ export const QuickCapture: React.FC<QuickCaptureProps> = ({ contacts, activeMeet
 
   return (
     <>
-      <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2 print:hidden">
+      <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] sm:bottom-4 right-4 z-40 flex flex-col items-end gap-2 print:hidden">
         {isOpen && (
           <div className="bg-white border border-slate-200 rounded-2xl p-2 shadow-xl w-60 space-y-1">
             {activeMeeting && (

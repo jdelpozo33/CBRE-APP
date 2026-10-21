@@ -750,8 +750,15 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({
                         <span className="font-bold text-slate-900 text-[11px] truncate max-w-[170px]">
                           {log.title}
                         </span>
-                        <span className="text-[9px] uppercase font-bold text-emerald-800 px-1.5 py-0.2 rounded bg-emerald-100 border border-emerald-200">
-                          {log.type}
+                        <span className="flex items-center gap-1">
+                          {log.pendingSync && (
+                            <span className="text-[9px] font-bold text-amber-800 px-1.5 rounded bg-amber-100 border border-amber-200">
+                              Waiting to sync
+                            </span>
+                          )}
+                          <span className="text-[9px] uppercase font-bold text-emerald-800 px-1.5 py-0.2 rounded bg-emerald-100 border border-emerald-200">
+                            {log.type}
+                          </span>
                         </span>
                       </div>
                       <div className="text-[10px] text-slate-600 font-semibold truncate">
