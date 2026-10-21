@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Plus, X, Mic, StickyNote, PhoneCall, Link2, Square, RefreshCw } from "lucide-react";
 import { Contact, QuickActivityLog } from "../types.ts";
-import { LogCallForm, LogCallDraft } from "./LogCallForm.tsx";
+import { LogCallForm, LogCallDraft, toDateInput, toTimeInput } from "./LogCallForm.tsx";
 import { useVoiceRecorder } from "../hooks/useVoiceRecorder.ts";
 
 export interface LinkedMeeting {
@@ -60,11 +60,13 @@ const SheetFrame: React.FC<{ title: string; icon: React.ReactNode; onClose: () =
 const RecordSheet: React.FC<{
   activeMeeting: LinkedMeeting | null;
   onSaveNote: (text: string) => Promise<void>;
+  onFillLogCall: (transcript: string) => Promise<void>;
   onClose: () => void;
-}> = ({ activeMeeting, onSaveNote, onClose }) => {
+}> = ({ activeMeeting, onSaveNote, onFillLogCall, onClose }) => {
   const voice = useVoiceRecorder();
   const [isSaving, setIsSaving] = useState(false);
-  const busy = voice.isRecording || voice.isTranscribing;
+  const [isExtracting, setIsExtracting] = useState(false);
+  const busy = voice.isRecording || voice.isTranscribing || isExtracting;
 
   const close = async () => {
     if (voice.isRecording) await voice.stop();
@@ -109,22 +111,49 @@ const RecordSheet: React.FC<{
         />
       </label>
 
-      <button
-        type="button"
-        disabled={busy || isSaving || !voice.transcript.trim()}
-        onClick={async () => {
-          setIsSaving(true);
-          try {
-            await onSaveNote(voice.transcript.trim());
-            onClose();
-          } finally {
-            setIsSaving(false);
-          }
-        }}
-        className="w-full min-h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-50 cursor-pointer"
-      >
-        {isSaving ? "Saving..." : "Save as Note"}
-      </button>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <button
+          type="button"
+          disabled={busy || isSaving || !voice.transcript.trim()}
+          onClick={async () => {
+            setIsSaving(true);
+            try {
+              await onSaveNote(voice.transcript.trim());
+              onClose();
+            } finally {
+              setIsSaving(false);
+            }
+          }}
+          className="flex-1 min-h-12 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+        >
+          {isSaving ? "Saving..." : "Save as Note"}
+        </button>
+        <button
+          type="button"
+          disabled={busy || isSaving || !voice.transcript.trim()}
+          onClick={async () => {
+            setIsExtracting(true);
+            try {
+              await onFillLogCall(voice.transcript.trim());
+            } finally {
+              setIsExtracting(false);
+            }
+          }}
+          className="flex-1 min-h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+        >
+          {isExtracting ? (
+            <>
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              Reading call details...
+            </>
+          ) : (
+            <>
+              <PhoneCall className="w-4 h-4" />
+              Fill Log Call
+            </>
+          )}
+        </button>
+      </div>
     </SheetFrame>
   );
 };
@@ -171,6 +200,40 @@ export const QuickCapture: React.FC<QuickCaptureProps> = ({ contacts, activeMeet
   const [isOpen, setIsOpen] = useState(false);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [callDraft, setCallDraft] = useState<Partial<LogCallDraft> | undefined>(undefined);
+  const [callReviewNotice, setCallReviewNotice] = useState<string | undefined>(undefined);
+
+  // Turn a recording into a pre-filled Log Call draft that the broker reviews before saving.
+  const fillLogCallFromRecording = async (transcript: string) => {
+    const now = new Date();
+    let draft: Partial<LogCallDraft> = { notes: transcript };
+    let notice = "Pre-filled from your recording. Review the details and confirm before saving.";
+    try {
+      const res = await fetch("/api/extract-call-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript,
+          localNow: now.toLocaleString([], { dateStyle: "full", timeStyle: "short" }),
+          localDate: toDateInput(now),
+          localTime: toTimeInput(now),
+        }),
+      });
+      const data = await res.json();
+      if (data.draft) draft = data.draft;
+      if (data.extractedBy !== "claude") {
+        notice = "Claude was unavailable, so only CRM names and properties were matched. Review carefully before saving.";
+      }
+    } catch {
+      notice = "Could not read call details automatically. The transcript is in the notes; fill in the rest before saving.";
+    }
+    setCallDraft({
+      ...draft,
+      date: draft.date || toDateInput(now),
+      time: draft.time || toTimeInput(now),
+    });
+    setCallReviewNotice(notice);
+    setSheet("call");
+  };
 
   const saveNote = (text: string) => {
     const firstLine = text.split("\n")[0];
@@ -190,6 +253,7 @@ export const QuickCapture: React.FC<QuickCaptureProps> = ({ contacts, activeMeet
   const open = (next: Sheet) => {
     setIsOpen(false);
     setCallDraft(undefined);
+    setCallReviewNotice(undefined);
     setSheet(next);
   };
 
@@ -238,13 +302,19 @@ export const QuickCapture: React.FC<QuickCaptureProps> = ({ contacts, activeMeet
       </div>
 
       {sheet === "record" && (
-        <RecordSheet activeMeeting={activeMeeting} onSaveNote={saveNote} onClose={() => setSheet(null)} />
+        <RecordSheet
+          activeMeeting={activeMeeting}
+          onSaveNote={saveNote}
+          onFillLogCall={fillLogCallFromRecording}
+          onClose={() => setSheet(null)}
+        />
       )}
       {sheet === "note" && <NoteSheet activeMeeting={activeMeeting} onSaveNote={saveNote} onClose={() => setSheet(null)} />}
       {sheet === "call" && (
         <LogCallForm
           contacts={contacts}
           initial={callDraft}
+          reviewNotice={callReviewNotice}
           linkedMeeting={activeMeeting}
           onSave={onSaveLog}
           onClose={() => setSheet(null)}

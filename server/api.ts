@@ -111,6 +111,85 @@ apiApp.post("/api/meeting-snapshots", (req: Request, res: Response) => {
   });
 });
 
+// --- Voice recording -> Log Call draft ---
+// Extracts contact, date/time, property/deal, notes and suggested tags from a recorded call
+// summary. The broker always reviews the draft before it is saved.
+apiApp.post("/api/extract-call-log", async (req: Request, res: Response) => {
+  const { transcript, localNow, localDate, localTime, speedMode = "turbo" } = req.body;
+  if (!transcript || typeof transcript !== "string" || !transcript.trim()) {
+    return res.status(400).json({ error: "Missing transcript" });
+  }
+  const contacts = getContacts();
+  const listings = getListings();
+  const lower = transcript.toLowerCase();
+
+  // CRM-only extraction, used when Claude is unavailable.
+  const heuristicDraft = () => {
+    const contact = contacts.find((c) => lower.includes(c.name.toLowerCase().replace(/,.*$/, "")));
+    const listing = listings.find(
+      (l) => lower.includes(l.address.split(",")[0].toLowerCase()) || lower.includes(l.title.toLowerCase())
+    );
+    return {
+      who: contact?.name || "",
+      date: localDate || "",
+      time: localTime || "",
+      property: listing ? listing.address : "",
+      notes: transcript.trim(),
+      tags: [] as string[],
+    };
+  };
+
+  try {
+    const result = await executeClaudeCall(
+      `Current local date and time for the broker: ${localNow || "unknown"}
+
+CRM contacts (use the exact name when the transcript refers to one of them):
+${contacts.map((c) => `- ${c.name} (${c.role}, ${c.company})`).join("\n")}
+
+CRM properties:
+${listings.map((l) => `- ${l.address}, ${l.city} (${l.title})`).join("\n")}
+
+VOICE RECORDING TRANSCRIPT:
+"""
+${transcript}
+"""`,
+      {
+        speedMode: speedMode === "balanced" ? "balanced" : "turbo",
+        json: true,
+        system: `You turn a real estate broker's spoken recap of a phone call into a call-log draft.
+Return JSON with exactly these keys:
+{
+  "who": string,            // the person the broker called; exact CRM name if it matches, else the name as spoken, else ""
+  "date": string,           // YYYY-MM-DD when the call happened; resolve words like "today" or "yesterday" from the current local date; "" if unclear
+  "time": string,           // HH:MM 24-hour when the call happened; "" if not mentioned
+  "property": string,       // property address or deal discussed; CRM address if it matches; "" if none
+  "notes": string,          // concise notes of what was discussed and next steps, faithful to the recording
+  "tags": string[]          // 1-4 short tags such as "Follow-up", "Pricing", "LOI", "Tour", "Financing", "Lease"
+}
+Never invent facts that are not in the recording.`,
+        timeoutMs: 30000,
+      }
+    );
+    const parsed = JSON.parse(result.text);
+    const fallback = heuristicDraft();
+    return res.json({
+      draft: {
+        who: typeof parsed.who === "string" && parsed.who ? parsed.who : fallback.who,
+        date: /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : fallback.date,
+        time: /^\d{2}:\d{2}$/.test(parsed.time) ? parsed.time : fallback.time,
+        property: typeof parsed.property === "string" ? parsed.property : fallback.property,
+        notes: typeof parsed.notes === "string" && parsed.notes ? parsed.notes : fallback.notes,
+        tags: Array.isArray(parsed.tags) ? parsed.tags.map(String).slice(0, 6) : [],
+      },
+      extractedBy: "claude",
+      modelUsed: result.modelUsed,
+    });
+  } catch (error: any) {
+    console.warn("Call-log extraction notice (using CRM matching only):", error?.message);
+    return res.json({ draft: heuristicDraft(), extractedBy: "crm-matching" });
+  }
+});
+
 // --- 2. Audio Transcription Cleanup ---
 // Claude does not accept audio input, so the browser transcribes recordings locally with
 // Whisper and sends the raw text here. Claude restores speaker turns and fixes misheard
