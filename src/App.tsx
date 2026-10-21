@@ -7,14 +7,14 @@ import { DatabaseView } from "./components/DatabaseView.tsx";
 import { WorkspaceHub } from "./components/WorkspaceHub.tsx";
 import { HomeView } from "./components/HomeView.tsx";
 import { UpcomingMeetings } from "./components/UpcomingMeetings.tsx";
-import { useUpcomingMeetings, UpcomingMeeting } from "./hooks/useUpcomingMeetings.ts";
+import { useUpcomingMeetings, UpcomingMeeting, findActiveMeeting } from "./hooks/useUpcomingMeetings.ts";
 import { MeetingBriefingView, isBriefingSection } from "./components/MeetingBriefingView.tsx";
 import {
   WorkspaceConfirmModal,
   WorkspaceConfirmAction,
 } from "./components/WorkspaceConfirmModal.tsx";
 import { DealMemoPrintModal } from "./components/DealMemoPrintModal.tsx";
-import { QuickBrokerCockpit } from "./components/QuickBrokerCockpit.tsx";
+import { QuickCapture } from "./components/QuickCapture.tsx";
 import { PreMeetingDossierView } from "./components/PreMeetingDossierView.tsx";
 import { ExternalIntelModal } from "./components/ExternalIntelModal.tsx";
 import { workspace, ProviderAccount } from "./providers/index.ts";
@@ -116,6 +116,9 @@ export default function App() {
         notes: briefingMeeting.description || "",
       }
     : null;
+
+  // Captures made now are linked to the meeting in progress or starting within 30 minutes
+  const activeMeeting = findActiveMeeting(upcoming.meetings);
 
   const handleOpenBriefing = (meeting: UpcomingMeeting) => {
     setBriefingMeeting(meeting);
@@ -530,7 +533,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-emerald-100 selection:text-emerald-900">
       {/* Toast Notification */}
       {notification && (
-        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 border border-slate-800 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs animate-in fade-in slide-in-from-bottom-2">
+        <div className="fixed bottom-24 left-4 right-4 sm:bottom-5 sm:right-auto z-50 bg-slate-900 border border-slate-800 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs animate-in fade-in slide-in-from-bottom-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span className="font-semibold">{notification}</span>
         </div>
@@ -764,19 +767,8 @@ export default function App() {
         speedMode={speedMode}
       />
 
-      {/* Floating Speed-Dial Quick Actions Cockpit */}
-      <QuickBrokerCockpit
-        currentTab={currentTab}
-        setCurrentTab={setCurrentTab}
-        hasActiveDeal={Boolean(analysisResult)}
-        activeDeal={analysisResult}
-        pendingCommsCount={pendingCommsCount}
-        contacts={contacts}
-        user={user}
-        onOpenDealMemo={() => setShowDealMemoModal(true)}
-        onQuickLogCall={handleAddActivityLog}
-        onQuickScheduleCalendar={(title, deadline) => handleScheduleCalendarFromNotes(title, deadline)}
-      />
+      {/* Floating quick capture: Record, Quick note, Log call */}
+      <QuickCapture contacts={contacts} activeMeeting={activeMeeting} onSaveLog={handleAddActivityLog} />
 
       {/* Footer */}
       <footer className="mt-12 border-t border-slate-200 bg-white py-5 text-center text-xs text-slate-500">
