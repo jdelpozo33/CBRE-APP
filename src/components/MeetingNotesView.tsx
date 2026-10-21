@@ -523,7 +523,7 @@ ${analysis.actionItems.map((a) => `• [${a.priority}] ${a.task} (${a.owner} by 
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-slate-900">Live Web & Market Intelligence</h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase">
-                  Google Search Grounded
+                  Claude Web Search
                 </span>
               </div>
             </div>

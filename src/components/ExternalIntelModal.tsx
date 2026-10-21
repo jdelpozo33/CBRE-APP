@@ -70,7 +70,7 @@ export const ExternalIntelModal: React.FC<ExternalIntelModalProps> = ({
         showNotification(
           data.cached
             ? "⚡ External intelligence loaded from cache"
-            : "⚡ Live web intelligence pulled via Google Search grounding"
+            : "⚡ Live web intelligence pulled via Claude web search"
         );
       } else if (data.error) {
         showNotification(`Notice: ${data.error}`);
@@ -116,7 +116,7 @@ export const ExternalIntelModal: React.FC<ExternalIntelModalProps> = ({
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-slate-900">Live External Intelligence & Comps</h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase">
-                  Google Search Grounded
+                  Claude Web Search
                 </span>
               </div>
             </div>

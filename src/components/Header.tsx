@@ -163,7 +163,7 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={() => onToggleSpeedMode(speedMode === "turbo" ? "balanced" : "turbo")}
                 className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-800 transition-colors cursor-pointer"
-                title="Toggle Gemini Engine: Turbo (<2s Flash-Lite with minimal reasoning) vs Balanced"
+                title="Toggle Claude Engine: Turbo (low effort, fastest) vs Balanced (medium effort, deeper analysis)"
               >
                 <Zap className={`w-3.5 h-3.5 ${speedMode === "turbo" ? "text-amber-500 fill-amber-500" : "text-emerald-600"}`} />
                 <span>{speedMode === "turbo" ? "Turbo Engine" : "Balanced Engine"}</span>

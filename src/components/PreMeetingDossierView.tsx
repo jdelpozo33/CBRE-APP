@@ -103,7 +103,7 @@ export const PreMeetingDossierView: React.FC<PreMeetingDossierViewProps> = ({
         showNotification(
           data.cached
             ? `⚡ Pre-Meeting Dossier loaded (Instant Cache)`
-            : `⚡ Live Pre-Meeting Dossier generated via Google Search & CRM`
+            : `⚡ Live Pre-Meeting Dossier generated via Claude web search & CRM`
         );
       }
     } catch (err: any) {
@@ -292,7 +292,7 @@ export const PreMeetingDossierView: React.FC<PreMeetingDossierViewProps> = ({
           <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin mx-auto" />
           <h3 className="text-base font-bold text-slate-900">Gathering Pre-Meeting Intelligence...</h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Pulling live comparable sales from Google Search, interest rate yields, municipal zoning notices, and your CRM history.
+            Pulling live comparable sales via Claude web search, interest rate yields, municipal zoning notices, and your CRM history.
           </p>
         </div>
       )}

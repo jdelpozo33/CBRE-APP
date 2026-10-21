@@ -1,5 +1,5 @@
 import express, { Request, Response } from "express";
-import { ai, executeResilientGeminiCall, getCached, setCached, ThinkingLevel } from "./gemini.ts";
+import { executeClaudeCall, getCached, setCached } from "./claude.ts";
 import {
   initialContacts,
   initialListings,
@@ -97,49 +97,15 @@ apiApp.post("/api/listings", (req: Request, res: Response) => {
   res.json({ success: true, listing: newListing });
 });
 
-// --- 2. Audio Transcription with Timeout and Resilient Handling ---
-apiApp.post("/api/transcribe-audio", async (req: Request, res: Response) => {
-  try {
-    const { audioBase64, mimeType } = req.body;
-    if (!audioBase64) {
-      return res.status(400).json({ error: "Missing audioBase64 data in request body" });
-    }
-
-    const cleanBase64 = audioBase64.replace(/^data:audio\/[a-z0-9A-Z_-]+;base64,/, "");
-    const effectiveMimeType = mimeType || "audio/webm";
-
-    // Call Gemini 3.5 transcribe with 20s timeout guard
-    const transcribePromise = ai.models.generateContent({
-      model: "gemini-3.5-transcribe",
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: effectiveMimeType,
-              data: cleanBase64,
-            },
-          },
-          {
-            text: "Transcribe this real estate brokerage meeting recording verbatim with speaker turns, commercial terms, numbers, dates, and addresses spelled accurately.",
-          },
-        ],
-      },
-    });
-
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Audio transcription timed out after 20s")), 20000)
-    );
-
-    const response = await Promise.race([transcribePromise, timeoutPromise]);
-    const transcript = response.text || "";
-    return res.json({ success: true, transcript });
-  } catch (error: any) {
-    console.error("Transcription error:", error);
-    return res.status(500).json({
-      error: error.message || "Failed to transcribe audio using Gemini",
-      suggestBrowserRecognition: true,
-    });
-  }
+// --- 2. Audio Transcription ---
+// Claude does not accept audio input, so recordings are transcribed in the browser with
+// the Web Speech API (live dictation). This endpoint tells the client to use that path.
+apiApp.post("/api/transcribe-audio", (_req: Request, res: Response) => {
+  return res.status(501).json({
+    error:
+      "Uploaded audio files can't be transcribed by Claude. Use the live microphone recorder (browser speech recognition) or paste the transcript.",
+    suggestBrowserRecognition: true,
+  });
 });
 
 // --- 3. Process Meeting Transcript & Generate Concise Notes, Database Matches, and Push Emails ---
@@ -332,21 +298,19 @@ Location / Deal: ${probableLocation}
 Context: Market Cap rates, 10-Yr Treasury yield benchmarks, SOFR debt spreads, and recent local commercial development trends.
 Summarize key actionable findings for a commercial broker in 3 crisp bullet points.`;
 
-    const extractionPromise = executeResilientGeminiCall(userPrompt, {
+    const extractionPromise = executeClaudeCall(userPrompt, {
       speedMode: speedMode as "turbo" | "balanced",
-      systemInstruction: systemPrompt,
-      responseMimeType: "application/json",
-      temperature: 0.1,
+      system: systemPrompt,
+      json: true,
     });
 
     const webResearchPromise = Promise.race([
-      executeResilientGeminiCall(webSearchPrompt, {
+      executeClaudeCall(webSearchPrompt, {
         speedMode: speedMode as "turbo" | "balanced",
-        tools: [{ googleSearch: {} }],
-        temperature: 0.2,
-        timeoutMs: 3500,
+        webSearch: true,
+        timeoutMs: 30000,
       }),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500)),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000)),
     ]).catch((err) => {
       console.warn("Parallel web research notice (using cached benchmark data):", err?.message);
       return null;
@@ -363,7 +327,7 @@ Summarize key actionable findings for a commercial broker in 3 crisp bullet poin
       if (jsonMatch) {
         parsed = JSON.parse(jsonMatch[0]);
       } else {
-        throw new Error("Unable to parse structured JSON from Gemini response");
+        throw new Error("Unable to parse structured JSON from Claude response");
       }
     }
 
@@ -416,25 +380,12 @@ Summarize key actionable findings for a commercial broker in 3 crisp bullet poin
     }
 
     // Attach parallel web research findings
-    if (webRes && webRes.response) {
+    if (webRes) {
       const webText = webRes.text || "";
-      const rawMetadata = webRes.response.candidates?.[0]?.groundingMetadata;
-      const searchQueries: string[] = rawMetadata?.webSearchQueries || [
-        `${probableLocation} commercial cap rates`,
-        "commercial real estate interest rate benchmarks 2026",
-      ];
-
-      const sources: { title: string; url: string }[] = [];
-      if (rawMetadata?.groundingChunks) {
-        for (const chunk of rawMetadata.groundingChunks) {
-          if (chunk.web?.uri) {
-            sources.push({
-              title: chunk.web.title || new URL(chunk.web.uri).hostname,
-              url: chunk.web.uri,
-            });
-          }
-        }
-      }
+      const searchQueries: string[] = webRes.searchQueries.length
+        ? webRes.searchQueries
+        : [`${probableLocation} commercial cap rates`, "commercial real estate interest rate benchmarks 2026"];
+      const sources = webRes.sources;
 
       parsed.webResearch = {
         summary: webText || "Live commercial indicators show stable pricing across core transit corridors with competitive debt spreads.",
@@ -476,7 +427,7 @@ Summarize key actionable findings for a commercial broker in 3 crisp bullet poin
       cached: false,
       executionTimeMs: elapsed,
       modelUsed: extractionRes.modelUsed,
-      antiSaturationStatus: `Active (Engine: ${extractionRes.modelUsed}, Attempts: ${extractionRes.attempts})`,
+      antiSaturationStatus: `Active (Engine: ${extractionRes.modelUsed})`,
     });
   } catch (error: any) {
     console.error("Meeting analysis error, activating emergency resilient recovery:", error);
@@ -601,7 +552,7 @@ apiApp.post("/api/web-research", async (req: Request, res: Response) => {
       return res.json({ success: true, webResearch: cached, cached: true });
     }
 
-    const prompt = `Perform an up-to-date Google search for real estate broker intelligence:
+    const prompt = `Perform an up-to-date web search for real estate broker intelligence:
 Subject: ${target}
 
 Identify:
@@ -611,27 +562,14 @@ Identify:
 
 Provide a concise, executive briefing with bulleted data points.`;
 
-    const responseWrapper = await executeResilientGeminiCall(prompt, {
+    const responseWrapper = await executeClaudeCall(prompt, {
       speedMode: speedMode as "turbo" | "balanced",
-      tools: [{ googleSearch: {} }],
-      temperature: 0.2,
+      webSearch: true,
     });
 
     const summary = responseWrapper.text || "";
-    const rawMetadata = responseWrapper.response.candidates?.[0]?.groundingMetadata;
-    const searchQueries: string[] = rawMetadata?.webSearchQueries || [target];
-    const sources: { title: string; url: string }[] = [];
-
-    if (rawMetadata?.groundingChunks) {
-      for (const chunk of rawMetadata.groundingChunks) {
-        if (chunk.web?.uri) {
-          sources.push({
-            title: chunk.web.title || new URL(chunk.web.uri).hostname,
-            url: chunk.web.uri,
-          });
-        }
-      }
-    }
+    const searchQueries: string[] = responseWrapper.searchQueries.length ? responseWrapper.searchQueries : [target];
+    const sources = responseWrapper.sources;
 
     const resultData = {
       summary,
@@ -662,7 +600,7 @@ apiApp.post("/api/generate-insights", async (req: Request, res: Response) => {
       return res.json({ success: true, insights: cached, cached: true });
     }
 
-    const responseWrapper = await executeResilientGeminiCall(
+    const responseWrapper = await executeClaudeCall(
       `Perform an institutional-grade advisory analysis on this real estate transaction:
 Deal Details:
 ${JSON.stringify(dealData, null, 2)}
@@ -686,7 +624,7 @@ Return JSON with format:
 }`,
       {
         speedMode: speedMode as "turbo" | "balanced",
-        responseMimeType: "application/json",
+        json: true,
       }
     );
 
@@ -775,19 +713,18 @@ apiApp.post("/api/pre-meeting-prep", async (req: Request, res: Response) => {
     );
 
     // Parallel external web research for property/submarket
-    const webPrompt = `Perform an up-to-date Google search for commercial real estate intelligence regarding:
+    const webPrompt = `Perform an up-to-date web search for commercial real estate intelligence regarding:
 Location: ${targetProperty}
 Context: Submarket cap rates, recent comparable sales, current commercial loan rates (SOFR spread, 10-Yr Treasury), and recent local zoning/municipal news.
 Provide 3 crisp bullet points.`;
 
     const webResearchPromise = Promise.race([
-      executeResilientGeminiCall(webPrompt, {
+      executeClaudeCall(webPrompt, {
         speedMode: speedMode as "turbo" | "balanced",
-        tools: [{ googleSearch: {} }],
-        temperature: 0.2,
-        timeoutMs: 3500,
+        webSearch: true,
+        timeoutMs: 30000,
       }),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500)),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000)),
     ]).catch((err) => {
       console.warn("Pre-meeting web grounding notice:", err?.message);
       return null;
@@ -850,10 +787,9 @@ Respond ONLY in valid JSON matching this structure:
 }`;
 
     const [extractionRes, webRes] = await Promise.all([
-      executeResilientGeminiCall(synthesisPrompt, {
+      executeClaudeCall(synthesisPrompt, {
         speedMode: speedMode as "turbo" | "balanced",
-        responseMimeType: "application/json",
-        temperature: 0.1,
+        json: true,
       }),
       webResearchPromise,
     ]);
@@ -871,19 +807,8 @@ Respond ONLY in valid JSON matching this structure:
     }
 
     // Attach live web citations if available
-    if (webRes && webRes.response) {
-      const metadata = webRes.response?.candidates?.[0]?.groundingMetadata;
-      if (metadata?.groundingChunks) {
-        const sources = metadata.groundingChunks
-          .filter((c: any) => c.web?.uri)
-          .map((c: any) => ({
-            title: c.web?.title || "Market Research",
-            url: c.web?.uri,
-          }));
-        if (sources.length > 0 && parsedDossier.externalWebIntel) {
-          parsedDossier.externalWebIntel.webSources = sources.slice(0, 4);
-        }
-      }
+    if (webRes && webRes.sources.length > 0 && parsedDossier.externalWebIntel) {
+      parsedDossier.externalWebIntel.webSources = webRes.sources.slice(0, 4);
     }
 
     setCached(cacheKey, parsedDossier);

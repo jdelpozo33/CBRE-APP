@@ -247,7 +247,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const handleTranscribeWithGemini = async () => {
+  const handleTranscribeAudio = async () => {
     if (!audioBase64) return;
     setIsTranscribing(true);
     try {
@@ -262,6 +262,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
       const data = await res.json();
       if (data.transcript) {
         setTranscript(data.transcript);
+      } else if (data.error) {
+        alert(data.error);
       }
     } catch (err: any) {
       console.error("Transcription error:", err);
@@ -286,7 +288,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
 
     // Automatically trigger end-to-end processing & email dispatch
     setTimeout(async () => {
-      setAutoStatusMessage("⚡ Auto-Pilot: Matching CBRE CRM & querying live Google Search web comps...");
+      setAutoStatusMessage("⚡ Auto-Pilot: Matching CBRE CRM & querying live Claude web search comps...");
       await onProcessTranscript(sample.transcript, "1420 Market Street Debrief", undefined, true);
       setIsAutoSimulating(false);
       setAutoStatusMessage(null);
@@ -600,10 +602,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
                       ? "bg-emerald-600 text-white shadow-xs"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
-                  title="Flash-Lite: sub-2 second response, minimal reasoning delay, highest rate limit tolerance"
+                  title="Claude at low effort: fastest responses for routine extraction"
                 >
                   <Zap className="w-3 h-3 fill-current" />
-                  <span>Turbo (&lt;2s)</span>
+                  <span>Turbo</span>
                 </button>
                 <button
                   type="button"
@@ -613,7 +615,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
                       ? "bg-emerald-600 text-white shadow-xs"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
-                  title="Gemini 3.8 Flash: balanced depth with low thinking latency"
+                  title="Claude at medium effort: deeper reasoning for complex deals"
                 >
                   <Sparkles className="w-3 h-3" />
                   <span>Balanced</span>
@@ -626,7 +628,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
                 <span className="font-mono text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-semibold">
                   {lastAiLatency.cached
                     ? "⚡ Instant (Cache Hit)"
-                    : `⚡ ${(lastAiLatency.ms / 1000).toFixed(1)}s · ${lastAiLatency.model.replace("gemini-", "")}`}
+                    : `⚡ ${(lastAiLatency.ms / 1000).toFixed(1)}s · ${lastAiLatency.model.replace("claude-", "")}`}
                 </span>
               )}
 
@@ -649,7 +651,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
               <div className="flex items-center justify-between pb-2 border-b border-emerald-200/80">
                 <div className="flex items-center gap-2 text-emerald-900 font-bold">
                   <Zap className="w-4 h-4 fill-emerald-600 text-emerald-600" />
-                  <span>5 Architectural Techniques Keeping Gemini Fast & Saturation-Proof</span>
+                  <span>5 Architectural Techniques Keeping Claude Fast & Saturation-Proof</span>
                 </div>
                 <span className="text-[10px] font-mono uppercase bg-emerald-100 border border-emerald-300 text-emerald-800 px-2 py-0.5 rounded font-bold">
                   Active
@@ -657,12 +659,12 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-[11px] text-slate-700">
                 <div className="bg-white p-2.5 rounded-lg border border-emerald-100 shadow-xs">
-                  <strong className="text-emerald-900 block mb-0.5">1. Zero Thinking Latency (ThinkingLevel.LOW / MINIMAL)</strong>
-                  Standard reasoning models spend 4-10s producing invisible thinking tokens. Setting minimal reasoning cuts generation delay by ~70%.
+                  <strong className="text-emerald-900 block mb-0.5">1. Effort Control (low / medium)</strong>
+                  Turbo runs Claude at low effort so routine extraction returns quickly; Balanced uses medium effort for deeper deal analysis.
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-emerald-100 shadow-xs">
                   <strong className="text-emerald-900 block mb-0.5">2. Concurrent Parallel Grounding (Promise.all)</strong>
-                  Instead of awaiting debrief extraction then sequentially awaiting Google Search, both run simultaneously in parallel.
+                  Instead of awaiting debrief extraction then sequentially awaiting Claude web search, both run simultaneously in parallel.
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-emerald-100 shadow-xs">
                   <strong className="text-emerald-900 block mb-0.5">3. 70% Context Pruning (Anti-TPM Saturation)</strong>
@@ -673,8 +675,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
                   Repeated debriefs and neighborhood queries resolve immediately from memory cache without consuming any API quota.
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-emerald-100 shadow-xs md:col-span-2">
-                  <strong className="text-emerald-900 block mb-0.5">5. Jittered Backoff & Flash-Lite Saturation Fallback</strong>
-                  If Google AI returns 429 (Resource Exhausted) or 503 (Overloaded), the system automatically retries with randomized backoff and seamlessly falls back to high-throughput Flash-Lite.
+                  <strong className="text-emerald-900 block mb-0.5">5. Automatic Retries & Server-Side Fallback</strong>
+                  If the Claude API returns 429 (rate limited) or 5xx (overloaded), the SDK retries with exponential backoff, and declined requests are re-run on a fallback model server-side.
                 </div>
               </div>
             </div>

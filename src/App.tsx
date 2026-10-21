@@ -73,7 +73,7 @@ export default function App() {
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
   const [confirmAction, setConfirmAction] = useState<WorkspaceConfirmAction | null>(null);
 
-  // Gemini Speed Engine & Anti-Saturation state
+  // Claude Speed Engine & Anti-Saturation state
   const [speedMode, setSpeedMode] = useState<"turbo" | "balanced">("turbo");
   const [lastAiLatency, setLastAiLatency] = useState<{
     ms: number;
@@ -188,7 +188,7 @@ export default function App() {
       if (data.executionTimeMs !== undefined) {
         setLastAiLatency({
           ms: data.executionTimeMs,
-          model: data.modelUsed || "gemini-3.1-flash-lite",
+          model: data.modelUsed || "claude-opus-5-5",
           cached: !!data.cached,
         });
       }
@@ -235,12 +235,12 @@ export default function App() {
             entityName: result.dealName,
             propertyOrContext: result.matchedListing?.address || "CBRE Portfolio",
             outcome: `Auto-Dispatched ${result.communications.length} Stakeholder Emails`,
-            notes: `Autonomous pipeline ran: extracted ${result.financialTerms.purchasePrice} price, verified cap rate, queried live Google Search, and pushed emails.`,
+            notes: `Autonomous pipeline ran: extracted ${result.financialTerms.purchasePrice} price, verified cap rate, ran live Claude web search, and pushed emails.`,
             followUpDate: "Tomorrow 9:00 AM",
           });
 
           showNotification(
-            `⚡ Auto-Pilot (${latencyLabel}): Spoken debrief analyzed, Google Search queried, and ${result.communications.length} emails auto-dispatched!`
+            `⚡ Auto-Pilot (${latencyLabel}): Spoken debrief analyzed, Claude web search queried, and ${result.communications.length} emails auto-dispatched!`
           );
         } else {
           showNotification(
@@ -731,7 +731,7 @@ export default function App() {
             <span>CBRE Commercial & Residential Deal Operating System</span>
           </div>
           <div className="flex items-center gap-3 text-slate-500">
-            <span>Powered by Gemini 3.8</span>
+            <span>Powered by Claude</span>
             <span>·</span>
             <span>Google Workspace 1P API</span>
             <span>·</span>
