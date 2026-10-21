@@ -1,12 +1,9 @@
 import express, { Request, Response } from "express";
 import { executeClaudeCall, getCached, setCached } from "./claude.ts";
+import { listRecords, insertRecord } from "./database.ts";
 import {
-  initialContacts,
-  initialListings,
-  initialComps,
-  dispatchedMessagesLog,
-  initialActivityLogs,
   Contact,
+  MarketComp,
   ListingProperty,
   DispatchedMessage,
   QuickActivityLog,
@@ -19,21 +16,19 @@ apiApp.use(express.json({ limit: "60mb" }));
 apiApp.use(express.urlencoded({ extended: true, limit: "60mb" }));
 
 
-// Local mutable state
-const contacts: Contact[] = [...initialContacts];
-const listings: ListingProperty[] = [...initialListings];
-const comps = [...initialComps];
-const messagesLog: DispatchedMessage[] = [...dispatchedMessagesLog];
-const activityLogs: QuickActivityLog[] = [...initialActivityLogs];
+// Persistent records live in SQLite (server/database.ts)
+const getContacts = () => listRecords<Contact>("contacts");
+const getListings = () => listRecords<ListingProperty>("listings");
+const getComps = () => listRecords<MarketComp>("comps");
 
 // --- 1. Database Endpoints ---
 apiApp.get("/api/database", (_req: Request, res: Response) => {
   res.json({
-    contacts,
-    listings,
-    comps,
-    messagesLog,
-    activityLogs,
+    contacts: getContacts(),
+    listings: getListings(),
+    comps: getComps(),
+    messagesLog: listRecords<DispatchedMessage>("messages"),
+    activityLogs: listRecords<QuickActivityLog>("activity_logs"),
   });
 });
 
@@ -57,8 +52,8 @@ apiApp.post("/api/activity-logs", (req: Request, res: Response) => {
     followUpDate: req.body.followUpDate || "Within 24 Hours",
   };
 
-  activityLogs.unshift(newLog);
-  res.json({ success: true, log: newLog, totalLogs: activityLogs.length });
+  insertRecord("activity_logs", newLog);
+  res.json({ success: true, log: newLog, totalLogs: listRecords("activity_logs").length });
 });
 
 apiApp.post("/api/contacts", (req: Request, res: Response) => {
@@ -72,7 +67,7 @@ apiApp.post("/api/contacts", (req: Request, res: Response) => {
     notes: req.body.notes || "",
     preferredChannel: req.body.preferredChannel || "email",
   };
-  contacts.unshift(newContact);
+  insertRecord("contacts", newContact);
   res.json({ success: true, contact: newContact });
 });
 
@@ -93,7 +88,7 @@ apiApp.post("/api/listings", (req: Request, res: Response) => {
     status: req.body.status || "Active Listing",
     summary: req.body.summary || "",
   };
-  listings.unshift(newListing);
+  insertRecord("listings", newListing);
   res.json({ success: true, listing: newListing });
 });
 
@@ -159,7 +154,7 @@ apiApp.post("/api/process-meeting", async (req: Request, res: Response) => {
     // 2. Token Pruning: Compact brokerage database context to eliminate unnecessary token overhead
     // which otherwise rapidly saturates Tokens-Per-Minute (TPM) limits
     const dbSummary = {
-      contacts: contacts.slice(0, 8).map((c) => ({
+      contacts: getContacts().slice(0, 8).map((c) => ({
         id: c.id,
         name: c.name,
         role: c.role,
@@ -167,7 +162,7 @@ apiApp.post("/api/process-meeting", async (req: Request, res: Response) => {
         email: c.email,
         phone: c.phone,
       })),
-      listings: listings.slice(0, 5).map((l) => ({
+      listings: getListings().slice(0, 5).map((l) => ({
         id: l.id,
         title: l.title,
         address: l.address,
@@ -175,7 +170,7 @@ apiApp.post("/api/process-meeting", async (req: Request, res: Response) => {
         capRate: l.capRate,
         status: l.status,
       })),
-      recentComps: comps.slice(0, 3).map((cmp) => ({
+      recentComps: getComps().slice(0, 3).map((cmp) => ({
         address: cmp.address,
         price: cmp.salePrice,
         capRate: cmp.capRate,
@@ -631,7 +626,7 @@ Deal Details:
 ${JSON.stringify(dealData, null, 2)}
 
 Market Comps in Database:
-${JSON.stringify(comps.slice(0, 3), null, 2)}
+${JSON.stringify(getComps().slice(0, 3), null, 2)}
 
 Focus Area requested: ${focusArea || "Comprehensive Valuation, Negotiation Leverage, and Closing Velocity"}
 
@@ -696,12 +691,12 @@ apiApp.post("/api/send-message", (req: Request, res: Response) => {
     dealReference: dealReference || "Brokerage Deal",
   };
 
-  messagesLog.unshift(newMessage);
+  insertRecord("messages", newMessage);
 
   return res.json({
     success: true,
     message: newMessage,
-    totalDispatched: messagesLog.length,
+    totalDispatched: listRecords("messages").length,
   });
 });
 
@@ -730,10 +725,10 @@ apiApp.post("/api/pre-meeting-prep", async (req: Request, res: Response) => {
     }
 
     // Match contact & listing from local CRM
-    const matchedContact = contacts.find(
+    const matchedContact = getContacts().find(
       (c) => c.name.toLowerCase().includes(clientName.toLowerCase()) || clientName.toLowerCase().includes(c.name.toLowerCase())
     );
-    const matchedListing = listings.find(
+    const matchedListing = getListings().find(
       (l) => l.address.toLowerCase().includes(targetProperty.toLowerCase()) || targetProperty.toLowerCase().includes(l.address.toLowerCase())
     );
 
