@@ -5,6 +5,7 @@ import { MeetingNotesView } from "./components/MeetingNotesView.tsx";
 import { CommunicationsHub } from "./components/CommunicationsHub.tsx";
 import { DatabaseView } from "./components/DatabaseView.tsx";
 import { WorkspaceHub } from "./components/WorkspaceHub.tsx";
+import { HomeView } from "./components/HomeView.tsx";
 import {
   WorkspaceConfirmModal,
   WorkspaceConfirmAction,
@@ -15,6 +16,7 @@ import { PreMeetingDossierView } from "./components/PreMeetingDossierView.tsx";
 import { ExternalIntelModal } from "./components/ExternalIntelModal.tsx";
 import { workspace, ProviderAccount } from "./providers/index.ts";
 import {
+  AppTab,
   DealAnalysisResult,
   Contact,
   ListingProperty,
@@ -42,9 +44,7 @@ import {
 } from "lucide-react";
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<
-    "premeeting" | "intake" | "notes" | "comms" | "database" | "workspace"
-  >("premeeting");
+  const [currentTab, setCurrentTab] = useState<AppTab>("home");
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [analysisResult, setAnalysisResult] = useState<DealAnalysisResult | null>(null);
   const [showDealMemoModal, setShowDealMemoModal] = useState<boolean>(false);
@@ -573,6 +573,34 @@ export default function App() {
             showNotification={showNotification}
             speedMode={speedMode}
             onOpenExternalIntel={handleOpenExternalIntel}
+          />
+        )}
+
+        {currentTab === "home" && (
+          <HomeView
+            activityLogs={activityLogs}
+            recorder={
+              <AudioRecorder
+                compact
+                onProcessTranscript={handleProcessTranscript}
+                isProcessing={isProcessing}
+                speedMode={speedMode}
+                onToggleSpeedMode={setSpeedMode}
+                lastAiLatency={lastAiLatency}
+                prefilledContext={prefilledDebriefData}
+                onClearPrefilledContext={() => setPrefilledDebriefData(null)}
+                onOpenExternalIntel={handleOpenExternalIntel}
+                onAutoLoggedActivity={async (title, entity, outcome) => {
+                  await handleAddActivityLog({
+                    type: "auto_pipeline",
+                    title,
+                    entityName: entity,
+                    propertyOrContext: "CBRE Portfolio",
+                    outcome,
+                  });
+                }}
+              />
+            }
           />
         )}
 

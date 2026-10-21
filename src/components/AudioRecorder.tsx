@@ -37,6 +37,8 @@ interface AudioRecorderProps {
   prefilledContext?: { propertyAddress?: string; clientName?: string; meetingTitle?: string } | null;
   onClearPrefilledContext?: () => void;
   onOpenExternalIntel?: (query?: string) => void;
+  // Compact mode (home screen): just record & scribe, without sample debriefs and engine panels.
+  compact?: boolean;
 }
 
 export const AudioRecorder: React.FC<AudioRecorderProps> = ({
@@ -49,6 +51,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   prefilledContext,
   onClearPrefilledContext,
   onOpenExternalIntel,
+  compact = false,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -359,7 +362,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
         <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
           <div className="flex items-center justify-between pb-4 border-b border-slate-200">
             <div>
-              <h2 className="text-base font-bold text-slate-900 tracking-tight">Audio Debrief</h2>
+              <h2 className="text-base font-bold text-slate-900 tracking-tight">{compact ? "Record & Scribe" : "Audio Debrief"}</h2>
             </div>
 
             {/* Hands-free toggle */}
@@ -448,6 +451,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
 
           {/* Quick Presets for Busy Brokers */}
           <div className="pt-3 border-t border-slate-200 space-y-2">
+            {!compact && (
+              <>
             <div className="flex items-center justify-between text-xs text-slate-500">
               <span className="font-medium text-slate-700">1-Tap Sample Debriefs:</span>
               <button
@@ -499,6 +504,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
                 <div className="text-[11px] text-emerald-700 font-mono font-medium">28k SF · HQ Lease</div>
               </button>
             </div>
+              </>
+            )}
 
             <div className="pt-2 text-center">
               {!showUpload ? (
@@ -593,6 +600,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
             </div>
           )}
 
+          {!compact && (
+            <>
           {/* Speed & Anti-Saturation Control Strip */}
           <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
             <div className="flex items-center gap-2">
@@ -685,7 +694,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
               </div>
             </div>
           )}
-
+            </>
+          )}
           <textarea
             value={transcript}
             onChange={(e) => setTranscript(e.target.value)}

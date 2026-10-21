@@ -17,11 +17,11 @@ import {
   Sparkles,
   Compass,
 } from "lucide-react";
-import { Contact, DealAnalysisResult, QuickActivityLog } from "../types.ts";
+import { AppTab, Contact, DealAnalysisResult, QuickActivityLog } from "../types.ts";
 
 interface QuickBrokerCockpitProps {
-  currentTab: "premeeting" | "intake" | "notes" | "comms" | "database" | "workspace";
-  setCurrentTab: (tab: "premeeting" | "intake" | "notes" | "comms" | "database" | "workspace") => void;
+  currentTab: AppTab;
+  setCurrentTab: (tab: AppTab) => void;
   hasActiveDeal: boolean;
   activeDeal: DealAnalysisResult | null;
   pendingCommsCount: number;

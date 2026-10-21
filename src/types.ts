@@ -240,3 +240,6 @@ export interface SampleCall {
   transcript: string;
 }
 
+
+// Top-level screens in the app shell.
+export type AppTab = "home" | "premeeting" | "intake" | "notes" | "comms" | "database" | "workspace";

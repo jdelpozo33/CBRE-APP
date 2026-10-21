@@ -1,5 +1,6 @@
 import React from "react";
 import type { ProviderAccount } from "../providers/index.ts";
+import type { AppTab } from "../types.ts";
 import {
   Building2,
   Mic,
@@ -12,11 +13,12 @@ import {
   Zap,
   Compass,
   Globe,
+  Home,
 } from "lucide-react";
 
 interface HeaderProps {
-  currentTab: "premeeting" | "intake" | "notes" | "comms" | "database" | "workspace";
-  setCurrentTab: (tab: "premeeting" | "intake" | "notes" | "comms" | "database" | "workspace") => void;
+  currentTab: AppTab;
+  setCurrentTab: (tab: AppTab) => void;
   pendingCommsCount: number;
   totalContactsCount: number;
   hasActiveDeal: boolean;
@@ -62,6 +64,19 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Navigation Controls */}
           <nav className="flex items-center gap-1 sm:gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => setCurrentTab("home")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                currentTab === "home"
+                  ? "bg-emerald-600 text-white shadow-sm font-semibold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
+              }`}
+            >
+              <Home className="w-3.5 h-3.5" />
+              <span>Home</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setCurrentTab("premeeting")}
