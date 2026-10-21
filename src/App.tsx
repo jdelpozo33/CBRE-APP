@@ -70,7 +70,28 @@ export default function App() {
   const [confirmAction, setConfirmAction] = useState<WorkspaceConfirmAction | null>(null);
 
   // Claude Speed Engine & Anti-Saturation state
-  const [speedMode, setSpeedMode] = useState<"turbo" | "balanced">("turbo");
+  const [speedMode, setSpeedMode] = useState<"turbo" | "balanced">("balanced");
+  const [models, setModels] = useState<{ standard: string; turbo: string } | null>(null);
+
+  // Load the saved speed mode and configured models
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.speedMode) setSpeedMode(data.speedMode);
+        if (data.models) setModels(data.models);
+      })
+      .catch(() => {});
+  }, []);
+
+  const changeSpeedMode = (mode: "turbo" | "balanced") => {
+    setSpeedMode(mode);
+    fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ speedMode: mode }),
+    }).catch(() => {});
+  };
   const [lastAiLatency, setLastAiLatency] = useState<{
     ms: number;
     model: string;
@@ -552,7 +573,8 @@ export default function App() {
         onSignIn={handleConnectAccount}
         isLoggingIn={isLoggingIn}
         speedMode={speedMode}
-        onToggleSpeedMode={setSpeedMode}
+        onToggleSpeedMode={changeSpeedMode}
+        models={models}
         lastAiLatency={lastAiLatency}
         onOpenExternalIntel={() => handleOpenExternalIntel()}
       />
@@ -629,7 +651,7 @@ export default function App() {
                 onProcessTranscript={handleProcessTranscript}
                 isProcessing={isProcessing}
                 speedMode={speedMode}
-                onToggleSpeedMode={setSpeedMode}
+                onToggleSpeedMode={changeSpeedMode}
                 lastAiLatency={lastAiLatency}
                 prefilledContext={prefilledDebriefData}
                 onClearPrefilledContext={() => setPrefilledDebriefData(null)}
@@ -675,7 +697,7 @@ export default function App() {
               onProcessTranscript={handleProcessTranscript}
               isProcessing={isProcessing}
               speedMode={speedMode}
-              onToggleSpeedMode={setSpeedMode}
+              onToggleSpeedMode={changeSpeedMode}
               lastAiLatency={lastAiLatency}
               prefilledContext={prefilledDebriefData}
               onClearPrefilledContext={() => setPrefilledDebriefData(null)}

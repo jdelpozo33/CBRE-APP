@@ -1,9 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import dotenv from "dotenv";
-
-dotenv.config();
-
-export const CLAUDE_MODEL = "claude-opus-5-5";
+import { modelConfig, supportsServerFallback } from "./config.ts";
 
 // Reads ANTHROPIC_API_KEY from the environment. The SDK retries 429 / 5xx / connection
 // errors with exponential backoff on its own, so no hand-rolled retry loop is needed.
@@ -64,10 +60,10 @@ function stripJsonFences(text: string): string {
 
 /**
  * Claude execution engine:
- * 1. Effort control: Turbo runs at effort "low" for fast answers, Balanced at "medium" for deeper analysis
+ * 1. Speed modes: Turbo uses the configured fast model at effort "low"; Standard uses the main model at "medium"
  * 2. Per-call timeout guard so a slow upstream never hangs the UI
  * 3. SDK-managed retries with backoff on 429 (rate limit) / 5xx (overloaded)
- * 4. Server-side refusal fallback ("default" mode) so a declined request is re-run on another model
+ * 4. Server-side refusal fallback ("default" mode) on models that support it
  * 5. Web search via Claude's server tool, with citations collected as sources
  */
 export async function executeClaudeCall(
@@ -86,17 +82,19 @@ export async function executeClaudeCall(
   const textParts: string[] = [];
   const sources: { title: string; url: string }[] = [];
   const searchQueries: string[] = [];
-  let modelUsed = CLAUDE_MODEL;
+  const model = speedMode === "turbo" ? modelConfig.turbo : modelConfig.standard;
+  let modelUsed = model;
 
   // Server tools (web search) can return pause_turn on long turns; resume a few times.
   for (let turn = 0; turn < 3; turn++) {
     const response = await anthropic.beta.messages.create(
       {
-        model: CLAUDE_MODEL,
+        model,
         max_tokens: 16000,
         output_config: { effort: speedMode === "turbo" ? "low" : "medium" },
-        betas: ["server-side-fallback-2026-07-01"],
-        fallbacks: "default",
+        ...(supportsServerFallback(model)
+          ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }
+          : {}),
         ...(system ? { system } : {}),
         ...(options.webSearch
           ? { tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }] }

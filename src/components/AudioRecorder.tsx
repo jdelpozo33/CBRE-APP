@@ -615,7 +615,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
                       ? "bg-emerald-600 text-white shadow-xs"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
-                  title="Claude at low effort: fastest responses for routine extraction"
+                  title="Faster, lower-quality model for routine extraction"
                 >
                   <Zap className="w-3 h-3 fill-current" />
                   <span>Turbo</span>
@@ -628,10 +628,10 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
                       ? "bg-emerald-600 text-white shadow-xs"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
-                  title="Claude at medium effort: deeper reasoning for complex deals"
+                  title="Standard model: best quality for complex deals"
                 >
                   <Sparkles className="w-3 h-3" />
-                  <span>Balanced</span>
+                  <span>Standard</span>
                 </button>
               </div>
             </div>
@@ -672,8 +672,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-[11px] text-slate-700">
                 <div className="bg-white p-2.5 rounded-lg border border-emerald-100 shadow-xs">
-                  <strong className="text-emerald-900 block mb-0.5">1. Effort Control (low / medium)</strong>
-                  Turbo runs Claude at low effort so routine extraction returns quickly; Balanced uses medium effort for deeper deal analysis.
+                  <strong className="text-emerald-900 block mb-0.5">1. Turbo Mode (fast model) vs Standard</strong>
+                  Turbo switches to the faster model at low effort so routine extraction returns quickly; Standard uses the main model for deeper deal analysis.
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-emerald-100 shadow-xs">
                   <strong className="text-emerald-900 block mb-0.5">2. Concurrent Parallel Grounding (Promise.all)</strong>

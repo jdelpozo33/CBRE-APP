@@ -22,6 +22,7 @@ interface HeaderProps {
   isLoggingIn?: boolean;
   speedMode?: "turbo" | "balanced";
   onToggleSpeedMode?: (mode: "turbo" | "balanced") => void;
+  models?: { standard: string; turbo: string } | null;
   lastAiLatency?: { ms: number; model: string; cached: boolean } | null;
   onOpenExternalIntel?: () => void;
 }
@@ -35,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
   isLoggingIn,
   speedMode = "turbo",
   onToggleSpeedMode,
+  models,
   lastAiLatency,
   onOpenExternalIntel,
 }) => {
@@ -131,11 +133,16 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => onToggleSpeedMode(speedMode === "turbo" ? "balanced" : "turbo")}
-                className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-800 transition-colors cursor-pointer"
-                title="Toggle Claude Engine: Turbo (low effort, fastest) vs Balanced (medium effort, deeper analysis)"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 min-h-9 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 text-emerald-800 transition-colors cursor-pointer"
+                title={
+                  speedMode === "turbo"
+                    ? `Turbo on: faster answers from ${models?.turbo || "the fast model"} (lower quality). Click to switch to ${models?.standard || "the standard model"}.`
+                    : `Turbo off: best quality from ${models?.standard || "the standard model"}. Click for faster answers from ${models?.turbo || "the fast model"}.`
+                }
+                aria-pressed={speedMode === "turbo"}
               >
                 <Zap className={`w-3.5 h-3.5 ${speedMode === "turbo" ? "text-amber-500 fill-amber-500" : "text-emerald-600"}`} />
-                <span>{speedMode === "turbo" ? "Turbo Engine" : "Balanced Engine"}</span>
+                <span className="hidden sm:inline">{speedMode === "turbo" ? "Turbo On" : "Turbo Off"}</span>
                 {lastAiLatency && (
                   <span className="text-[10px] text-emerald-700 font-mono pl-1 border-l border-emerald-200 font-bold">
                     {lastAiLatency.cached ? "0s" : `${(lastAiLatency.ms / 1000).toFixed(1)}s`}

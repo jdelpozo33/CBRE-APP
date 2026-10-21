@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import { executeClaudeCall, getCached, setCached } from "./claude.ts";
-import { listRecords, insertRecord } from "./database.ts";
+import { listRecords, insertRecord, getSetting, setSetting } from "./database.ts";
+import { modelConfig } from "./config.ts";
 import { buildMeetingSnapshot, MeetingInput } from "./meetings.ts";
 import {
   Contact,
@@ -101,6 +102,23 @@ apiApp.post("/api/listings", (req: Request, res: Response) => {
   res.json({ success: true, listing: newListing });
 });
 
+// --- Settings (persisted) ---
+// Speed mode applies when a request doesn't specify one.
+const currentSpeedMode = () => getSetting<"turbo" | "balanced">("speedMode", "balanced");
+
+apiApp.get("/api/settings", (_req: Request, res: Response) => {
+  res.json({ speedMode: currentSpeedMode(), models: modelConfig });
+});
+
+apiApp.put("/api/settings", (req: Request, res: Response) => {
+  const { speedMode } = req.body;
+  if (speedMode !== "turbo" && speedMode !== "balanced") {
+    return res.status(400).json({ error: 'speedMode must be "turbo" or "balanced"' });
+  }
+  setSetting("speedMode", speedMode);
+  res.json({ speedMode, models: modelConfig });
+});
+
 // --- Global search across CRM, calls, notes, emails and market comps ---
 // Every result carries its source; property results also carry their deal stage.
 apiApp.get("/api/search", (req: Request, res: Response) => {
@@ -183,7 +201,7 @@ apiApp.post("/api/meeting-snapshots", (req: Request, res: Response) => {
 // Extracts contact, date/time, property/deal, notes and suggested tags from a recorded call
 // summary. The broker always reviews the draft before it is saved.
 apiApp.post("/api/extract-call-log", async (req: Request, res: Response) => {
-  const { transcript, localNow, localDate, localTime, speedMode = "turbo" } = req.body;
+  const { transcript, localNow, localDate, localTime, speedMode = currentSpeedMode() } = req.body;
   if (!transcript || typeof transcript !== "string" || !transcript.trim()) {
     return res.status(400).json({ error: "Missing transcript" });
   }
@@ -298,7 +316,7 @@ Do not summarize, add, or remove content. Output only the cleaned transcript tex
 apiApp.post("/api/process-meeting", async (req: Request, res: Response) => {
   const reqStart = Date.now();
   try {
-    const { transcript, meetingTitle, dealContext, speedMode = "turbo" } = req.body;
+    const { transcript, meetingTitle, dealContext, speedMode = currentSpeedMode() } = req.body;
     if (!transcript || typeof transcript !== "string" || transcript.trim().length === 0) {
       return res.status(400).json({ error: "Transcript is required" });
     }
@@ -729,7 +747,7 @@ Summarize key actionable findings for a commercial broker in 3 crisp bullet poin
 // --- 4. Dedicated Live Web Research Endpoint ---
 apiApp.post("/api/web-research", async (req: Request, res: Response) => {
   try {
-    const { query, address, dealName, speedMode = "turbo" } = req.body;
+    const { query, address, dealName, speedMode = currentSpeedMode() } = req.body;
     const target = query || address || dealName || "commercial real estate investment trends";
 
     const cacheKey = `web_${target.toLowerCase().trim()}`;
@@ -780,7 +798,7 @@ Provide a concise, executive briefing with bulleted data points.`;
 // --- 4. Deep Strategic Insights Generator ---
 apiApp.post("/api/generate-insights", async (req: Request, res: Response) => {
   try {
-    const { dealData, focusArea, speedMode = "turbo" } = req.body;
+    const { dealData, focusArea, speedMode = currentSpeedMode() } = req.body;
     const cacheKey = `insights_${dealData?.dealName || ""}_${focusArea || ""}`;
     const cached = getCached<any>(cacheKey);
     if (cached) {
@@ -878,7 +896,7 @@ apiApp.post("/api/pre-meeting-prep", async (req: Request, res: Response) => {
       clientRole = "1031 Exchange Buyer",
       meetingType = "Property Walkthrough & Acquisition Terms",
       notes = "",
-      speedMode = "turbo",
+      speedMode = currentSpeedMode(),
     } = req.body;
 
     const cacheKey = `premeet_${targetProperty}_${clientName}_${meetingType}`.toLowerCase().replace(/[^a-z0-9]/g, "_");
