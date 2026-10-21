@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import { executeClaudeCall, getCached, setCached } from "./claude.ts";
 import { listRecords, insertRecord } from "./database.ts";
+import { buildMeetingSnapshot, MeetingInput } from "./meetings.ts";
 import {
   Contact,
   MarketComp,
@@ -93,6 +94,17 @@ apiApp.post("/api/listings", (req: Request, res: Response) => {
   };
   insertRecord("listings", newListing);
   res.json({ success: true, listing: newListing });
+});
+
+// --- Upcoming meeting snapshots (counterparty, top comps, property) from CRM data ---
+apiApp.post("/api/meeting-snapshots", (req: Request, res: Response) => {
+  const meetings: MeetingInput[] = Array.isArray(req.body.meetings) ? req.body.meetings : [];
+  const contacts = getContacts();
+  const listings = getListings();
+  const comps = getComps();
+  res.json({
+    snapshots: meetings.map((m) => buildMeetingSnapshot(m, contacts, listings, comps)),
+  });
 });
 
 // --- 2. Audio Transcription Cleanup ---

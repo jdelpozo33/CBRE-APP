@@ -6,6 +6,8 @@ import { CommunicationsHub } from "./components/CommunicationsHub.tsx";
 import { DatabaseView } from "./components/DatabaseView.tsx";
 import { WorkspaceHub } from "./components/WorkspaceHub.tsx";
 import { HomeView } from "./components/HomeView.tsx";
+import { UpcomingMeetings } from "./components/UpcomingMeetings.tsx";
+import { useUpcomingMeetings } from "./hooks/useUpcomingMeetings.ts";
 import {
   WorkspaceConfirmModal,
   WorkspaceConfirmAction,
@@ -89,6 +91,9 @@ export default function App() {
 
   // Listen to the connected account
   useEffect(() => workspace.onAccountChange(setUser), []);
+
+  // Meetings for the next 48 hours with CRM snapshots
+  const upcoming = useUpcomingMeetings(user);
 
   const handleConnectAccount = async () => {
     setIsLoggingIn(true);
@@ -579,6 +584,16 @@ export default function App() {
         {currentTab === "home" && (
           <HomeView
             activityLogs={activityLogs}
+            upcomingMeetings={
+              <UpcomingMeetings
+                meetings={upcoming.meetings}
+                isLoading={upcoming.isLoading}
+                error={upcoming.error}
+                isSample={upcoming.isSample}
+                onRefresh={upcoming.refresh}
+                onConnectCalendar={handleConnectAccount}
+              />
+            }
             recorder={
               <AudioRecorder
                 compact

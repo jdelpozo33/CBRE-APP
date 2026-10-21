@@ -243,3 +243,14 @@ export interface SampleCall {
 
 // Top-level screens in the app shell.
 export type AppTab = "home" | "premeeting" | "intake" | "notes" | "comms" | "database" | "workspace";
+
+// Compact CRM snapshot backing an upcoming meeting card.
+export type DataStrength = "Strong" | "Partial" | "Limited";
+
+export interface MeetingSnapshot {
+  meetingId: string;
+  counterparty: Contact | null;
+  property: ListingProperty | null;
+  topComps: MarketComp[];
+  dataStrength: DataStrength;
+}
