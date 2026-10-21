@@ -14,7 +14,7 @@ import {
 
 export const apiApp = express();
 
-// Enable JSON body parsing with large limit for audio base64 uploads
+// Enable JSON body parsing with a large limit for long transcripts and deal payloads
 apiApp.use(express.json({ limit: "60mb" }));
 apiApp.use(express.urlencoded({ extended: true, limit: "60mb" }));
 
@@ -97,15 +97,40 @@ apiApp.post("/api/listings", (req: Request, res: Response) => {
   res.json({ success: true, listing: newListing });
 });
 
-// --- 2. Audio Transcription ---
-// Claude does not accept audio input, so recordings are transcribed in the browser with
-// the Web Speech API (live dictation). This endpoint tells the client to use that path.
-apiApp.post("/api/transcribe-audio", (_req: Request, res: Response) => {
-  return res.status(501).json({
-    error:
-      "Uploaded audio files can't be transcribed by Claude. Use the live microphone recorder (browser speech recognition) or paste the transcript.",
-    suggestBrowserRecognition: true,
-  });
+// --- 2. Audio Transcription Cleanup ---
+// Claude does not accept audio input, so the browser transcribes recordings locally with
+// Whisper and sends the raw text here. Claude restores speaker turns and fixes misheard
+// commercial terms, numbers, dates, and addresses.
+apiApp.post("/api/transcribe-audio", async (req: Request, res: Response) => {
+  const { rawTranscript } = req.body;
+  if (!rawTranscript || typeof rawTranscript !== "string" || !rawTranscript.trim()) {
+    return res.status(400).json({ error: "Missing rawTranscript in request body" });
+  }
+
+  try {
+    const cleanup = await executeClaudeCall(
+      `RAW SPEECH-TO-TEXT TRANSCRIPT:
+"""
+${rawTranscript}
+"""`,
+      {
+        speedMode: "turbo",
+        system: `You clean up machine transcripts of real estate brokerage meeting recordings.
+Return the transcript verbatim, with speaker turns marked where the conversation makes them evident, and with commercial terms, numbers, dates, and addresses spelled accurately (fix obvious speech-recognition errors such as "cap rate" misheard words or spelled-out numbers).
+Do not summarize, add, or remove content. Output only the cleaned transcript text.`,
+        timeoutMs: 30000,
+      }
+    );
+    return res.json({
+      success: true,
+      transcript: cleanup.text || rawTranscript,
+      modelUsed: cleanup.modelUsed,
+    });
+  } catch (error: any) {
+    // The raw local transcript is still usable, so never block the broker on cleanup failure.
+    console.warn("Transcript cleanup notice (returning raw transcript):", error?.message);
+    return res.json({ success: true, transcript: rawTranscript, cleaned: false });
+  }
 });
 
 // --- 3. Process Meeting Transcript & Generate Concise Notes, Database Matches, and Push Emails ---

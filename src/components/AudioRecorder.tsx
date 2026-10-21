@@ -20,6 +20,7 @@ import {
   Info,
 } from "lucide-react";
 import { sampleBrokerDebriefs } from "../data/sampleCalls.ts";
+import { transcribeAudioLocally } from "../services/transcriptionService.ts";
 
 interface AudioRecorderProps {
   onProcessTranscript: (
@@ -52,8 +53,6 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [audioBase64, setAudioBase64] = useState<string | null>(null);
-  const [audioMimeType, setAudioMimeType] = useState<string>("audio/webm");
   const [fileName, setFileName] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>("");
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -68,6 +67,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
   const [autoStatusMessage, setAutoStatusMessage] = useState<string | null>(null);
   const [isAutoSimulating, setIsAutoSimulating] = useState<boolean>(false);
 
+  const audioBlobRef = useRef<Blob | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -162,20 +162,19 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
         const audioBlob = new Blob(audioChunksRef.current, { type: supportedMime });
         const url = URL.createObjectURL(audioBlob);
         setAudioUrl(url);
-        setAudioMimeType(supportedMime);
+        audioBlobRef.current = audioBlob;
         setFileName(`Debrief_${new Date().toISOString().slice(11, 19).replace(/:/g, "-")}.webm`);
-
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64Data = (reader.result as string).split(",")[1];
-          setAudioBase64(base64Data);
-        };
-        reader.readAsDataURL(audioBlob);
 
         stream.getTracks().forEach((track) => track.stop());
         if (audioContextRef.current) audioContextRef.current.close();
         if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
         setAudioLevel(0);
+
+        // Browsers without live speech recognition (e.g. Firefox) produce no transcript while
+        // recording, so transcribe the saved recording instead.
+        if (!transcriptRef.current.trim()) {
+          handleTranscribeAudio(audioBlob);
+        }
       };
 
       // Real-time live browser speech transcription
@@ -235,38 +234,38 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
     if (!file) return;
 
     setFileName(file.name);
-    setAudioMimeType(file.type || "audio/mp3");
     const url = URL.createObjectURL(file);
     setAudioUrl(url);
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64Data = (reader.result as string).split(",")[1];
-      setAudioBase64(base64Data);
-    };
-    reader.readAsDataURL(file);
+    audioBlobRef.current = file;
+    handleTranscribeAudio(file);
   };
 
-  const handleTranscribeAudio = async () => {
-    if (!audioBase64) return;
+  // Speech-to-text runs in the browser (Whisper); Claude then cleans up the raw transcript.
+  const handleTranscribeAudio = async (audio: Blob | null = audioBlobRef.current) => {
+    if (!audio) return;
     setIsTranscribing(true);
     try {
+      const rawTranscript = await transcribeAudioLocally(audio, setAutoStatusMessage);
+      if (!rawTranscript) {
+        setAutoStatusMessage("No speech was detected in this recording.");
+        return;
+      }
+      setTranscript(rawTranscript);
+
+      setAutoStatusMessage("Claude is cleaning up the transcript...");
       const res = await fetch("/api/transcribe-audio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          audioBase64,
-          mimeType: audioMimeType,
-        }),
+        body: JSON.stringify({ rawTranscript }),
       });
       const data = await res.json();
       if (data.transcript) {
         setTranscript(data.transcript);
-      } else if (data.error) {
-        alert(data.error);
       }
+      setAutoStatusMessage(null);
     } catch (err: any) {
       console.error("Transcription error:", err);
+      setAutoStatusMessage(`Audio transcription failed: ${err?.message || "unknown error"}`);
     } finally {
       setIsTranscribing(false);
     }
@@ -512,11 +511,16 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({
                 </button>
               ) : (
                 <label className="text-xs text-emerald-700 hover:text-emerald-800 cursor-pointer inline-flex items-center gap-1.5 font-semibold">
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>{fileName || "Select audio file (.mp3, .wav, .m4a)"}</span>
+                  {isTranscribing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                  <span>
+                    {isTranscribing
+                      ? `Transcribing ${fileName || "audio"}...`
+                      : fileName || "Select audio file (.mp3, .wav, .m4a)"}
+                  </span>
                   <input
                     type="file"
                     accept="audio/*"
+                    disabled={isTranscribing}
                     onChange={handleFileUpload}
                     className="hidden"
                   />
