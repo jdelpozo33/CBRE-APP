@@ -27,6 +27,8 @@ interface PreMeetingDossierViewProps {
   showNotification: (msg: string) => void;
   speedMode: "turbo" | "balanced";
   onOpenExternalIntel?: (query?: string) => void;
+  // Meeting selected from the calendar; overrides the preset scenarios when set.
+  meeting?: { key: string; property: string; client: string; role: string; type: string; notes: string } | null;
 }
 
 const PRESET_MEETINGS = [
@@ -63,6 +65,7 @@ export const PreMeetingDossierView: React.FC<PreMeetingDossierViewProps> = ({
   showNotification,
   speedMode,
   onOpenExternalIntel,
+  meeting,
 }) => {
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(0);
   const [customProperty, setCustomProperty] = useState(PRESET_MEETINGS[0].property);
@@ -114,12 +117,20 @@ export const PreMeetingDossierView: React.FC<PreMeetingDossierViewProps> = ({
     }
   };
 
-  // Initial load on first render if no dossier
+  // Load the selected calendar meeting, or the default scenario on first render
   React.useEffect(() => {
-    if (!dossier) {
+    if (meeting) {
+      setSelectedPresetIndex(-1);
+      setCustomProperty(meeting.property);
+      setCustomClient(meeting.client);
+      setCustomRole(meeting.role);
+      setCustomMeetingType(meeting.type);
+      setCustomNotes(meeting.notes);
+      handleFetchDossier(meeting.property, meeting.client, meeting.role, meeting.type, meeting.notes);
+    } else if (!dossier) {
       handleFetchDossier();
     }
-  }, []);
+  }, [meeting?.key]);
 
   const handleSelectPreset = (idx: number) => {
     setSelectedPresetIndex(idx);

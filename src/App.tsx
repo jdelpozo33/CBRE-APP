@@ -7,7 +7,8 @@ import { DatabaseView } from "./components/DatabaseView.tsx";
 import { WorkspaceHub } from "./components/WorkspaceHub.tsx";
 import { HomeView } from "./components/HomeView.tsx";
 import { UpcomingMeetings } from "./components/UpcomingMeetings.tsx";
-import { useUpcomingMeetings } from "./hooks/useUpcomingMeetings.ts";
+import { useUpcomingMeetings, UpcomingMeeting } from "./hooks/useUpcomingMeetings.ts";
+import { MeetingBriefingView, isBriefingSection } from "./components/MeetingBriefingView.tsx";
 import {
   WorkspaceConfirmModal,
   WorkspaceConfirmAction,
@@ -94,6 +95,32 @@ export default function App() {
 
   // Meetings for the next 48 hours with CRM snapshots
   const upcoming = useUpcomingMeetings(user);
+
+  // Meeting currently open in the briefing screen
+  const [briefingMeeting, setBriefingMeeting] = useState<UpcomingMeeting | null>(null);
+  const briefingDossierInput = briefingMeeting
+    ? {
+        key: briefingMeeting.id,
+        property:
+          (briefingMeeting.snapshot?.property &&
+            `${briefingMeeting.snapshot.property.address}, ${briefingMeeting.snapshot.property.city}`) ||
+          briefingMeeting.location ||
+          briefingMeeting.title,
+        client:
+          briefingMeeting.snapshot?.counterparty?.name ||
+          briefingMeeting.attendees[0]?.name ||
+          briefingMeeting.attendees[0]?.email ||
+          "Counterparty",
+        role: briefingMeeting.snapshot?.counterparty?.role || "Counterparty",
+        type: briefingMeeting.title,
+        notes: briefingMeeting.description || "",
+      }
+    : null;
+
+  const handleOpenBriefing = (meeting: UpcomingMeeting) => {
+    setBriefingMeeting(meeting);
+    setCurrentTab("premeeting");
+  };
 
   const handleConnectAccount = async () => {
     setIsLoggingIn(true);
@@ -517,8 +544,6 @@ export default function App() {
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         pendingCommsCount={pendingCommsCount}
-        totalContactsCount={contacts.length}
-        hasActiveDeal={Boolean(analysisResult)}
         user={user}
         onSignIn={handleConnectAccount}
         isLoggingIn={isLoggingIn}
@@ -570,17 +595,6 @@ export default function App() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {currentTab === "premeeting" && (
-          <PreMeetingDossierView
-            contacts={contacts}
-            listings={listings}
-            onStartPostMeetingDebrief={handleStartDebriefFromPreMeeting}
-            showNotification={showNotification}
-            speedMode={speedMode}
-            onOpenExternalIntel={handleOpenExternalIntel}
-          />
-        )}
-
         {currentTab === "home" && (
           <HomeView
             activityLogs={activityLogs}
@@ -592,6 +606,7 @@ export default function App() {
                 isSample={upcoming.isSample}
                 onRefresh={upcoming.refresh}
                 onConnectCalendar={handleConnectAccount}
+                onOpenBriefing={handleOpenBriefing}
               />
             }
             recorder={
@@ -619,80 +634,104 @@ export default function App() {
           />
         )}
 
-        {currentTab === "intake" && (
-          <AudioRecorder
-            onProcessTranscript={handleProcessTranscript}
-            isProcessing={isProcessing}
-            speedMode={speedMode}
-            onToggleSpeedMode={setSpeedMode}
-            lastAiLatency={lastAiLatency}
-            prefilledContext={prefilledDebriefData}
-            onClearPrefilledContext={() => setPrefilledDebriefData(null)}
-            onOpenExternalIntel={handleOpenExternalIntel}
-            onAutoLoggedActivity={async (title, entity, outcome) => {
-              await handleAddActivityLog({
-                type: "auto_pipeline",
-                title,
-                entityName: entity,
-                propertyOrContext: "CBRE Portfolio",
-                outcome,
-              });
-            }}
-          />
-        )}
-
-        {currentTab === "notes" && (
-          analysisResult ? (
-            <MeetingNotesView
-              analysis={analysisResult}
-              onProceedToEmails={() => setCurrentTab("comms")}
-              onSaveToDrive={handleSaveActiveDealToDrive}
-              onScheduleCalendar={handleScheduleCalendarFromNotes}
-              onOpenDealMemo={() => setShowDealMemoModal(true)}
-              onAutomateAllNextSteps={handleAutomateAllNextSteps}
+        {isBriefingSection(currentTab) && (
+          <MeetingBriefingView
+            section={currentTab}
+            onSectionChange={setCurrentTab}
+            meeting={briefingMeeting}
+            onClearMeeting={() => setBriefingMeeting(null)}
+            hasActiveDeal={Boolean(analysisResult)}
+            pendingCommsCount={pendingCommsCount}
+            totalContactsCount={contacts.length}
+          >
+          {currentTab === "premeeting" && (
+            <PreMeetingDossierView
+              contacts={contacts}
+              listings={listings}
+              onStartPostMeetingDebrief={handleStartDebriefFromPreMeeting}
+              showNotification={showNotification}
+              speedMode={speedMode}
               onOpenExternalIntel={handleOpenExternalIntel}
+              meeting={briefingDossierInput}
             />
-          ) : (
-            <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center max-w-xl mx-auto space-y-4 shadow-sm">
-              <h3 className="text-xl font-bold text-slate-900">Record or Load a Meeting Debrief</h3>
-              <p className="text-xs text-slate-500">
-                To view concise notes, live web intelligence, and the broker playbook, record your voice memo recap in Step 1.
-              </p>
-              <div className="flex justify-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setCurrentTab("intake")}
-                  className="py-2.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer"
-                >
-                  Go to Record Debrief
-                </button>
+          )}
+
+          {currentTab === "intake" && (
+            <AudioRecorder
+              onProcessTranscript={handleProcessTranscript}
+              isProcessing={isProcessing}
+              speedMode={speedMode}
+              onToggleSpeedMode={setSpeedMode}
+              lastAiLatency={lastAiLatency}
+              prefilledContext={prefilledDebriefData}
+              onClearPrefilledContext={() => setPrefilledDebriefData(null)}
+              onOpenExternalIntel={handleOpenExternalIntel}
+              onAutoLoggedActivity={async (title, entity, outcome) => {
+                await handleAddActivityLog({
+                  type: "auto_pipeline",
+                  title,
+                  entityName: entity,
+                  propertyOrContext: "CBRE Portfolio",
+                  outcome,
+                });
+              }}
+            />
+          )}
+
+          {currentTab === "notes" && (
+            analysisResult ? (
+              <MeetingNotesView
+                analysis={analysisResult}
+                onProceedToEmails={() => setCurrentTab("comms")}
+                onSaveToDrive={handleSaveActiveDealToDrive}
+                onScheduleCalendar={handleScheduleCalendarFromNotes}
+                onOpenDealMemo={() => setShowDealMemoModal(true)}
+                onAutomateAllNextSteps={handleAutomateAllNextSteps}
+                onOpenExternalIntel={handleOpenExternalIntel}
+              />
+            ) : (
+              <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center max-w-xl mx-auto space-y-4 shadow-sm">
+                <h3 className="text-xl font-bold text-slate-900">Record or Load a Meeting Debrief</h3>
+                <p className="text-xs text-slate-500">
+                  To view concise notes, live web intelligence, and the broker playbook, record your voice memo recap in Step 1.
+                </p>
+                <div className="flex justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentTab("intake")}
+                    className="py-2.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer"
+                  >
+                    Go to Record Debrief
+                  </button>
+                </div>
               </div>
-            </div>
-          )
-        )}
+            )
+          )}
 
-        {currentTab === "comms" && (
-          <CommunicationsHub
-            communications={analysisResult?.communications || []}
-            dealName={analysisResult?.dealName || "1420 Market Street"}
-            onMessageDispatched={handleMessageDispatched}
-            contacts={contacts}
-            user={user}
-            onRequestConfirm={(act) => setConfirmAction(act)}
-          />
-        )}
+          {currentTab === "comms" && (
+            <CommunicationsHub
+              communications={analysisResult?.communications || []}
+              dealName={analysisResult?.dealName || "1420 Market Street"}
+              onMessageDispatched={handleMessageDispatched}
+              contacts={contacts}
+              user={user}
+              onRequestConfirm={(act) => setConfirmAction(act)}
+            />
+          )}
 
-        {currentTab === "database" && (
-          <DatabaseView
-            contacts={contacts}
-            listings={listings}
-            comps={comps}
-            messagesLog={messagesLog}
-            activityLogs={activityLogs}
-            onAddContact={handleAddContact}
-            onAddListing={handleAddListing}
-            onAddActivityLog={handleAddActivityLog}
-          />
+          {currentTab === "database" && (
+            <DatabaseView
+              contacts={contacts}
+              listings={listings}
+              comps={comps}
+              messagesLog={messagesLog}
+              activityLogs={activityLogs}
+              onAddContact={handleAddContact}
+              onAddListing={handleAddListing}
+              onAddActivityLog={handleAddActivityLog}
+            />
+          )}
+          </MeetingBriefingView>
         )}
 
         {currentTab === "workspace" && (

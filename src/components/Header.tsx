@@ -1,12 +1,9 @@
 import React from "react";
 import type { ProviderAccount } from "../providers/index.ts";
 import type { AppTab } from "../types.ts";
+import { isBriefingSection } from "./MeetingBriefingView.tsx";
 import {
   Building2,
-  Mic,
-  Send,
-  Database,
-  Layers,
   Mail,
   Calendar,
   HardDrive,
@@ -20,8 +17,6 @@ interface HeaderProps {
   currentTab: AppTab;
   setCurrentTab: (tab: AppTab) => void;
   pendingCommsCount: number;
-  totalContactsCount: number;
-  hasActiveDeal: boolean;
   user?: ProviderAccount | null;
   onSignIn?: () => void;
   isLoggingIn?: boolean;
@@ -35,8 +30,6 @@ export const Header: React.FC<HeaderProps> = ({
   currentTab,
   setCurrentTab,
   pendingCommsCount,
-  totalContactsCount,
-  hasActiveDeal,
   user,
   onSignIn,
   isLoggingIn,
@@ -79,61 +72,22 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               type="button"
-              onClick={() => setCurrentTab("premeeting")}
+              onClick={() => setCurrentTab(isBriefingSection(currentTab) ? currentTab : "premeeting")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-                currentTab === "premeeting"
+                isBriefingSection(currentTab)
                   ? "bg-emerald-600 text-white shadow-sm font-semibold"
                   : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
               }`}
             >
               <Compass className="w-3.5 h-3.5" />
-              <span>Pre-Meeting Dossier</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setCurrentTab(hasActiveDeal ? "notes" : "intake")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-                currentTab === "intake" || currentTab === "notes"
-                  ? "bg-emerald-600 text-white shadow-sm font-semibold"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
-              }`}
-            >
-              <Mic className="w-3.5 h-3.5" />
-              <span>{hasActiveDeal ? "Deal Notes" : "Debrief"}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setCurrentTab("comms")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-                currentTab === "comms"
-                  ? "bg-emerald-600 text-white shadow-sm font-semibold"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
-              }`}
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>2. Push Emails</span>
+              <span>Briefing</span>
               {pendingCommsCount > 0 && (
                 <span className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center ${
-                  currentTab === "comms" ? "bg-white text-emerald-700" : "bg-emerald-100 text-emerald-800"
+                  isBriefingSection(currentTab) ? "bg-white text-emerald-700" : "bg-emerald-100 text-emerald-800"
                 }`}>
                   {pendingCommsCount}
                 </span>
               )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setCurrentTab("database")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-                currentTab === "database"
-                  ? "bg-emerald-600 text-white shadow-sm font-semibold"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
-              }`}
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span>3. CRM ({totalContactsCount})</span>
             </button>
 
             <button
