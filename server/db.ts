@@ -267,7 +267,7 @@ export const initialComps: MarketComp[] = [
 
 export interface QuickActivityLog {
   id: string;
-  type: 'call' | 'tour' | 'auto_pipeline';
+  type: 'call' | 'tour' | 'auto_pipeline' | 'note';
   title: string;
   entityName: string;
   propertyOrContext: string;
@@ -276,6 +276,11 @@ export interface QuickActivityLog {
   timestamp: string;
   followUpDate?: string;
   source?: DataSource;
+  // When the call/note happened (ISO), tags, and the meeting it was captured during.
+  occurredAt?: string;
+  tags?: string[];
+  meetingId?: string;
+  meetingTitle?: string;
 }
 
 export const initialActivityLogs: QuickActivityLog[] = [

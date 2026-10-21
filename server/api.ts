@@ -49,9 +49,13 @@ apiApp.post("/api/activity-logs", (req: Request, res: Response) => {
     propertyOrContext: req.body.propertyOrContext || "General Portfolio",
     outcome: req.body.outcome || "Follow-up Scheduled",
     notes: req.body.notes || "",
-    timestamp,
-    followUpDate: req.body.followUpDate || "Within 24 Hours",
+    timestamp: typeof req.body.timestamp === "string" && req.body.timestamp ? req.body.timestamp : timestamp,
+    followUpDate: req.body.followUpDate,
     source: (req.body.type || "call") === "call" ? "Call" : "Note",
+    occurredAt: req.body.occurredAt || now.toISOString(),
+    tags: Array.isArray(req.body.tags) ? req.body.tags.map(String).slice(0, 20) : [],
+    meetingId: req.body.meetingId,
+    meetingTitle: req.body.meetingTitle,
   };
 
   insertRecord("activity_logs", newLog);

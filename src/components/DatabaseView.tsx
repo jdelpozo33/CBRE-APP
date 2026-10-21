@@ -760,6 +760,18 @@ export const DatabaseView: React.FC<DatabaseViewProps> = ({
                       <div className="text-[10px] text-emerald-700 font-medium">
                         Outcome: {log.outcome}
                       </div>
+                      {log.notes && log.type === "call" && (
+                        <p className="text-[10px] text-slate-600 line-clamp-2">{log.notes}</p>
+                      )}
+                      {log.tags && log.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {log.tags.map((tag) => (
+                            <span key={tag} className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[9px] font-semibold text-slate-600">
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       <div className="text-[9px] text-slate-400 font-mono flex items-center justify-between pt-0.5">
                         <span>{log.timestamp.slice(11, 16)}</span>
                         <span>Next: {log.followUpDate || "Done"}</span>

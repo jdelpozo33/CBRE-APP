@@ -18,6 +18,7 @@ import {
   Compass,
 } from "lucide-react";
 import { AppTab, Contact, DealAnalysisResult, QuickActivityLog } from "../types.ts";
+import { LogCallForm } from "./LogCallForm.tsx";
 
 interface QuickBrokerCockpitProps {
   currentTab: AppTab;
@@ -48,38 +49,11 @@ export const QuickBrokerCockpit: React.FC<QuickBrokerCockpitProps> = ({
   const [showCallModal, setShowCallModal] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
 
-  // Quick Call Log State
-  const [callContactId, setCallContactId] = useState<string>(contacts[0]?.id || "");
-  const [callOutcome, setCallOutcome] = useState("Agreed On Price & Terms");
-  const [callNotes, setCallNotes] = useState("");
-  const [isLoggingCall, setIsLoggingCall] = useState(false);
-
   // Quick Calendar Event State
   const [eventTitle, setEventTitle] = useState(
     activeDeal ? `Showing & Tour: ${activeDeal.dealName}` : "Client Walkthrough / LOI Review"
   );
   const [eventDeadline, setEventDeadline] = useState("Tomorrow 10:00 AM");
-
-  const handleLogCallSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const contact = contacts.find((c) => c.id === callContactId) || contacts[0];
-    if (!contact) return;
-
-    setIsLoggingCall(true);
-    await onQuickLogCall({
-      type: "call",
-      title: `Fast Call Log: ${contact.name}`,
-      entityName: `${contact.name} (${contact.role}, ${contact.company})`,
-      propertyOrContext: activeDeal?.matchedListing?.address || "Active Deal Portfolio",
-      outcome: callOutcome,
-      notes: callNotes || `Spoke with ${contact.name}. Outcome: ${callOutcome}.`,
-      followUpDate: "Within 24 Hours",
-    });
-
-    setIsLoggingCall(false);
-    setCallNotes("");
-    setShowCallModal(false);
-  };
 
   const handleScheduleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,7 +108,7 @@ export const QuickBrokerCockpit: React.FC<QuickBrokerCockpitProps> = ({
               className="w-full flex items-center gap-2.5 p-2 bg-slate-50 hover:bg-emerald-50 rounded-xl text-xs font-medium text-slate-800 hover:text-emerald-800 transition-colors cursor-pointer border border-slate-200"
             >
               <PhoneCall className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Log Client Call</span>
+              <span>Log Call</span>
             </button>
 
             <button
@@ -203,92 +177,9 @@ export const QuickBrokerCockpit: React.FC<QuickBrokerCockpitProps> = ({
         </button>
       </div>
 
-      {/* Quick Log Call Modal */}
+      {/* Log Call Form */}
       {showCallModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <PhoneCall className="w-4 h-4 text-emerald-600" />
-                <h3 className="text-sm font-bold text-slate-900">Log Client Call</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowCallModal(false)}
-                className="text-slate-400 hover:text-slate-700 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleLogCallSubmit} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Select Contact
-                </label>
-                <select
-                  value={callContactId}
-                  onChange={(e) => setCallContactId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 focus:bg-white"
-                >
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.role} - {c.company})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Call Outcome
-                </label>
-                <select
-                  value={callOutcome}
-                  onChange={(e) => setCallOutcome(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 focus:bg-white"
-                >
-                  <option value="Agreed On Price & Terms">Agreed On Price & Terms</option>
-                  <option value="Requested Revised Financial Pro-Forma">Requested Revised Financial Pro-Forma</option>
-                  <option value="Scheduled On-Site Walkthrough">Scheduled On-Site Walkthrough</option>
-                  <option value="Awaiting Lender Approval">Awaiting Lender Approval</option>
-                  <option value="Counter-Offer Received">Counter-Offer Received</option>
-                  <option value="Left Voicemail / Follow-up Tomorrow">Left Voicemail / Follow-up Tomorrow</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Memo
-                </label>
-                <input
-                  type="text"
-                  value={callNotes}
-                  onChange={(e) => setCallNotes(e.target.value)}
-                  placeholder="e.g. Buyer confirmed 1031 timeline and $450k deposit"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCallModal(false)}
-                  className="py-2 px-3 text-xs text-slate-600 hover:text-slate-900 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isLoggingCall}
-                  className="py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer"
-                >
-                  {isLoggingCall ? "Logging..." : "Log Call to CRM"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <LogCallForm contacts={contacts} onSave={onQuickLogCall} onClose={() => setShowCallModal(false)} />
       )}
 
       {/* Quick Schedule Modal */}
