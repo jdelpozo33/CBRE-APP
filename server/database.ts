@@ -25,6 +25,7 @@ export const COLLECTIONS = [
   "messages",
   "activity_logs",
   "notes",
+  "briefings",
   "webhooks",
   "settings",
 ] as const;

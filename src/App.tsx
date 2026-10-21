@@ -8,6 +8,7 @@ import { WorkspaceHub } from "./components/WorkspaceHub.tsx";
 import { HomeView } from "./components/HomeView.tsx";
 import { UpcomingMeetings } from "./components/UpcomingMeetings.tsx";
 import { GlobalSearch } from "./components/GlobalSearch.tsx";
+import { ExportPanel } from "./components/ExportPanel.tsx";
 import { useUpcomingMeetings, UpcomingMeeting, findActiveMeeting } from "./hooks/useUpcomingMeetings.ts";
 import { MeetingBriefingView, isBriefingSection } from "./components/MeetingBriefingView.tsx";
 import {
@@ -771,16 +772,19 @@ export default function App() {
         )}
 
         {currentTab === "workspace" && (
-          <WorkspaceHub
-            user={user}
-            onSignIn={handleConnectAccount}
-            onSignOut={handleDisconnectAccount}
-            isLoggingIn={isLoggingIn}
-            onRequestConfirm={(act) => setConfirmAction(act)}
-            showNotification={showNotification}
-            activeDeal={analysisResult}
-            contacts={contacts}
-          />
+          <div className="space-y-6">
+            <WorkspaceHub
+              user={user}
+              onSignIn={handleConnectAccount}
+              onSignOut={handleDisconnectAccount}
+              isLoggingIn={isLoggingIn}
+              onRequestConfirm={(act) => setConfirmAction(act)}
+              showNotification={showNotification}
+              activeDeal={analysisResult}
+              contacts={contacts}
+            />
+            <ExportPanel showNotification={showNotification} />
+          </div>
         )}
       </main>
 

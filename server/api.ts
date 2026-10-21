@@ -1,7 +1,20 @@
 import express, { Request, Response } from "express";
 import { executeClaudeCall, getCached, setCached } from "./claude.ts";
-import { listRecords, insertRecord, getSetting, setSetting } from "./database.ts";
+import { listRecords, insertRecord, deleteRecord, getSetting, setSetting } from "./database.ts";
 import { modelConfig } from "./config.ts";
+import {
+  WEBHOOK_EVENTS,
+  WebhookEvent,
+  Webhook,
+  StoredBriefing,
+  EXPORT_COLUMNS,
+  validateWebhookUrl,
+  createWebhook,
+  emitWebhookEvent,
+  sendTestEvent,
+  saveBriefing,
+  toCsv,
+} from "./integrations.ts";
 import { buildMeetingSnapshot, MeetingInput } from "./meetings.ts";
 import {
   Contact,
@@ -60,6 +73,7 @@ apiApp.post("/api/activity-logs", (req: Request, res: Response) => {
   };
 
   insertRecord("activity_logs", newLog);
+  emitWebhookEvent(newLog.type === "call" ? "call.logged" : "note.created", newLog);
   res.json({ success: true, log: newLog, totalLogs: listRecords("activity_logs").length });
 });
 
@@ -100,6 +114,64 @@ apiApp.post("/api/listings", (req: Request, res: Response) => {
   };
   insertRecord("listings", newListing);
   res.json({ success: true, listing: newListing });
+});
+
+// --- Export (JSON / CSV) ---
+apiApp.get("/api/export", (req: Request, res: Response) => {
+  const type = String(req.query.type || "all");
+  const format = String(req.query.format || "json");
+  const logs = listRecords<QuickActivityLog>("activity_logs");
+  const datasets: Record<string, Record<string, unknown>[]> = {
+    calls: logs.filter((l) => l.type === "call") as unknown as Record<string, unknown>[],
+    notes: logs.filter((l) => l.type !== "call") as unknown as Record<string, unknown>[],
+    briefings: listRecords<StoredBriefing>("briefings") as unknown as Record<string, unknown>[],
+  };
+  const stamp = new Date().toISOString().slice(0, 10);
+
+  if (type === "all") {
+    if (format !== "json") return res.status(400).json({ error: "Export everything as JSON, or pick one type for CSV." });
+    res.setHeader("Content-Disposition", `attachment; filename="broker-buddy-export-${stamp}.json"`);
+    return res.json({ exportedAt: new Date().toISOString(), ...datasets });
+  }
+  if (!(type in datasets)) return res.status(400).json({ error: "type must be calls, notes, briefings or all" });
+
+  const rows = datasets[type];
+  if (format === "csv") {
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="broker-buddy-${type}-${stamp}.csv"`);
+    return res.send(toCsv(rows, EXPORT_COLUMNS[type as keyof typeof EXPORT_COLUMNS]));
+  }
+  res.setHeader("Content-Disposition", `attachment; filename="broker-buddy-${type}-${stamp}.json"`);
+  return res.json(rows);
+});
+
+// --- Webhooks ---
+const publicWebhook = ({ secret, ...hook }: Webhook) => ({ ...hook, secretPreview: `${secret.slice(0, 6)}…` });
+
+apiApp.get("/api/webhooks", (_req: Request, res: Response) => {
+  res.json({ webhooks: listRecords<Webhook>("webhooks").map(publicWebhook), events: WEBHOOK_EVENTS });
+});
+
+apiApp.post("/api/webhooks", (req: Request, res: Response) => {
+  const url = String(req.body.url || "").trim();
+  const error = validateWebhookUrl(url);
+  if (error) return res.status(400).json({ error });
+  const events = (Array.isArray(req.body.events) ? req.body.events : []).filter((e: string) =>
+    (WEBHOOK_EVENTS as readonly string[]).includes(e)
+  ) as WebhookEvent[];
+  const hook = createWebhook(url, events);
+  // The signing secret is returned once, at creation.
+  res.json({ webhook: { ...publicWebhook(hook), secret: hook.secret } });
+});
+
+apiApp.delete("/api/webhooks/:id", (req: Request, res: Response) => {
+  res.json({ deleted: deleteRecord("webhooks", req.params.id) });
+});
+
+apiApp.post("/api/webhooks/:id/test", async (req: Request, res: Response) => {
+  const delivery = await sendTestEvent(req.params.id);
+  if (!delivery) return res.status(404).json({ error: "Webhook not found" });
+  res.json({ delivery });
 });
 
 // --- Settings (persisted) ---
@@ -623,6 +695,7 @@ Summarize key actionable findings for a commercial broker in 3 crisp bullet poin
 
     // Cache the analyzed result to prevent duplicate saturation
     setCached(normalizedKey, parsed);
+    saveBriefing("debrief", parsed.dealName || meetingTitle || "Meeting debrief", parsed, "claude");
 
     const elapsed = Date.now() - reqStart;
     return res.json({
@@ -733,6 +806,7 @@ Summarize key actionable findings for a commercial broker in 3 crisp bullet poin
       },
     };
 
+    saveBriefing("debrief", emergencyResult.dealName || "Meeting debrief", emergencyResult, "fallback");
     return res.json({
       success: true,
       result: emergencyResult,
@@ -1018,6 +1092,7 @@ Respond ONLY in valid JSON matching this structure:
     }
 
     setCached(cacheKey, parsedDossier);
+    saveBriefing("dossier", parsedDossier.meetingTitle || `${meetingType} - ${clientName}`, parsedDossier, "claude");
 
     return res.json({
       success: true,
@@ -1069,6 +1144,7 @@ Respond ONLY in valid JSON matching this structure:
       ],
     };
 
+    saveBriefing("dossier", fallbackDossier.meetingTitle, fallbackDossier, "fallback");
     return res.json({
       success: true,
       dossier: fallbackDossier,
