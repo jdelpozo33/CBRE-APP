@@ -82,8 +82,18 @@ export default function App() {
       .then((data) => {
         if (data.speedMode) setSpeedMode(data.speedMode);
         if (data.models) setModels(data.models);
+        if (data.connections) workspace.select(data.connections, false);
       })
       .catch(() => {});
+    // Save the broker's provider choices whenever they change them on the Connections page.
+    return workspace.onSelectionChange((connections, persist) => {
+      if (!persist) return;
+      fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connections }),
+      }).catch(() => {});
+    });
   }, []);
 
   const changeSpeedMode = (mode: "turbo" | "balanced") => {
@@ -114,8 +124,36 @@ export default function App() {
     setTimeout(() => setNotification(null), 4500);
   };
 
-  // Listen to the connected account
+  // Returning from a redirect sign-in (e.g. Dropbox): open Connections and report the outcome.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get("connected")) return;
+    setCurrentTab("workspace");
+    const error = params.get("connectError");
+    showNotification(error ? `Could not connect: ${error}` : "Files account connected");
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+
+  // Listen to the connected accounts (files may use a different provider than email & calendar)
   useEffect(() => workspace.onAccountChange(setUser), []);
+  const [filesAccount, setFilesAccount] = useState<ProviderAccount | null>(null);
+  useEffect(() => workspace.onFilesAccountChange(setFilesAccount), []);
+
+  const handleConnectFiles = async () => {
+    try {
+      const account = await workspace.connectFiles();
+      setFilesAccount(account);
+      showNotification(`Connected ${workspace.labels.files}: ${account.email || account.name}`);
+    } catch (err: any) {
+      alert(`Could not connect ${workspace.labels.files}: ${err.message || err}`);
+    }
+  };
+
+  const handleDisconnectFiles = async () => {
+    await workspace.disconnectFiles();
+    setFilesAccount(null);
+    showNotification(`Disconnected ${workspace.labels.files}`);
+  };
 
   // Meetings for the next 48 hours with CRM snapshots
   const upcoming = useUpcomingMeetings(user);
@@ -397,9 +435,9 @@ export default function App() {
   // Save active deal to cloud files with explicit confirmation
   const handleSaveActiveDealToDrive = () => {
     if (!analysisResult) return;
-    if (!user) {
+    if (!filesAccount) {
       setCurrentTab("workspace");
-      showNotification("Connect your account to save briefs to your cloud files");
+      showNotification(`Connect ${workspace.labels.files} to save briefs to your files`);
       return;
     }
 
@@ -431,10 +469,10 @@ export default function App() {
 
     setConfirmAction({
       type: "file_upload",
-      title: "Save Brief to Cloud Files",
-      description: "Upload a complete markdown briefing document to your connected file storage.",
+      title: `Save Brief to ${workspace.labels.files}`,
+      description: `Upload a complete markdown briefing document to your ${workspace.labels.files}.`,
       details: [
-        { label: "Account", value: user.email || user.name },
+        { label: "Account", value: filesAccount.email || filesAccount.name },
         { label: "File Name", value: `${filename}.md` },
         { label: "Deal", value: analysisResult.dealName },
       ],
@@ -442,7 +480,7 @@ export default function App() {
         try {
           if (!workspace.files) throw new Error("Your connected account does not support file storage.");
           await workspace.files.uploadNote(filename, markdownContent, analysisResult.dealName);
-          showNotification(`Saved "${filename}.md" to your files`);
+          showNotification(`Saved "${filename}.md" to ${workspace.labels.files}`);
           setConfirmAction(null);
         } catch (err: any) {
           alert(`File upload error: ${err.message}`);
@@ -803,6 +841,9 @@ export default function App() {
           <div className="space-y-6">
             <WorkspaceHub
               user={user}
+              filesAccount={filesAccount}
+              onConnectFiles={handleConnectFiles}
+              onDisconnectFiles={handleDisconnectFiles}
               onSignIn={handleConnectAccount}
               onSignOut={handleDisconnectAccount}
               isLoggingIn={isLoggingIn}

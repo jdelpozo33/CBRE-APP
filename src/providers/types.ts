@@ -86,16 +86,29 @@ export interface FileStorageProvider {
   listFiles(query?: string, max?: number): Promise<StoredFile[]>;
 }
 
+// What a provider can be chosen for on the Connections page.
+export type ConnectionKind = "mailCalendar" | "files";
+
 export interface WorkspaceProvider {
   id: string;
-  // Shown in the UI, e.g. "Google Workspace" or "Microsoft 365".
+  // Shown in the UI, e.g. "Google Workspace", "Microsoft 365" or "Dropbox".
   displayName: string;
-  labels: { email: string; calendar: string; files: string };
+  kinds: ConnectionKind[];
+  labels: { email?: string; calendar?: string; files?: string };
+  // False when the deployment hasn't added this provider's app credentials yet.
+  isConfigured: boolean;
+  setupHint?: string;
   connect(): Promise<ProviderAccount>;
   disconnect(): Promise<void>;
   // Calls back with the connected account, or null when disconnected. Returns an unsubscribe.
   onAccountChange(callback: (account: ProviderAccount | null) => void): () => void;
-  calendar: CalendarProvider;
-  email: EmailProvider;
+  calendar?: CalendarProvider;
+  email?: EmailProvider;
   files?: FileStorageProvider;
+}
+
+// Which provider the broker chose for each kind of connection.
+export interface ConnectionSelection {
+  mailCalendar: string;
+  files: string;
 }

@@ -16,12 +16,25 @@ import {
   MapPin,
   Users,
 } from "lucide-react";
-import { workspace, ProviderAccount, CalendarEvent, EmailMessage, StoredFile } from "../providers/index.ts";
+import {
+  workspace,
+  providersFor,
+  ProviderAccount,
+  CalendarEvent,
+  EmailMessage,
+  StoredFile,
+  ConnectionKind,
+} from "../providers/index.ts";
+import { useConnectionSelection } from "../hooks/useConnectionSelection.ts";
 import { WorkspaceConfirmAction } from "./WorkspaceConfirmModal.tsx";
 import { DealAnalysisResult, Contact } from "../types.ts";
 
 interface WorkspaceHubProps {
   user: ProviderAccount | null;
+  // Files account; the same as `user` when files use the email & calendar provider.
+  filesAccount: ProviderAccount | null;
+  onConnectFiles: () => Promise<void>;
+  onDisconnectFiles: () => Promise<void>;
   onSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
   isLoggingIn: boolean;
@@ -33,6 +46,9 @@ interface WorkspaceHubProps {
 
 export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({
   user,
+  filesAccount,
+  onConnectFiles,
+  onDisconnectFiles,
   onSignIn,
   onSignOut,
   isLoggingIn,
@@ -41,6 +57,7 @@ export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({
   activeDeal,
   contacts,
 }) => {
+  const selection = useConnectionSelection();
   const labels = workspace.labels;
   const [activeTab, setActiveTab] = useState<"email" | "calendar" | "files">("email");
 
@@ -118,7 +135,7 @@ export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({
 
   // Load stored files
   const loadFiles = async () => {
-    if (!user) return;
+    if (!filesAccount) return;
     setIsLoadingFiles(true);
     try {
       const files = workspace.files ? await workspace.files.listFiles(fileSearch, 12) : [];
@@ -134,9 +151,16 @@ export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({
     if (user) {
       if (activeTab === "email") loadEmail();
       if (activeTab === "calendar") loadCalendar();
-      if (activeTab === "files") loadFiles();
     }
-  }, [user, activeTab]);
+    if (filesAccount && activeTab === "files") loadFiles();
+  }, [user, filesAccount, activeTab, selection]);
+
+  // Clear data from the previous provider when the broker switches.
+  useEffect(() => {
+    setEmailMessages([]);
+    setCalendarEvents([]);
+  }, [selection.mailCalendar]);
+  useEffect(() => setStoredFiles([]), [selection.files]);
 
   // Handle Send Email with Mandatory Confirmation
   const handleInitiateSendEmail = (isDraft: boolean = false) => {
@@ -262,7 +286,7 @@ export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({
       title: "Save Brief to Cloud Files",
       description: `Upload a complete markdown briefing document to your ${labels.files}.`,
       details: [
-        { label: "Target Account", value: user?.email || "Connected account" },
+        { label: "Target Account", value: filesAccount?.email || "Connected account" },
         { label: "File Name", value: `${filename}.md` },
         { label: "Format", value: "Markdown (text/markdown)" },
         { label: "Deal Reference", value: activeDeal.dealName },
@@ -348,14 +372,55 @@ export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({
                     {isLoggingIn ? "Connecting..." : `Connect ${workspace.displayName}`}
                   </span>
                 </button>
-                <p className="text-[11px] text-slate-500 mt-1.5">More providers (e.g. Microsoft 365) can be added later.</p>
               </div>
             )}
           </div>
         </div>
 
+        {/* Provider choice: brokers use different email, calendar and file services */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-5 border-t border-slate-100 mt-5">
+          {(
+            [
+              { kind: "mailCalendar", title: "Email & calendar" },
+              { kind: "files", title: "Files" },
+            ] as { kind: ConnectionKind; title: string }[]
+          ).map(({ kind, title }) => (
+            <fieldset key={kind} className="space-y-2">
+              <legend className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">{title}</legend>
+              <div className="flex flex-wrap gap-2">
+                {providersFor(kind).map((provider) => {
+                  const selected = selection[kind] === provider.id;
+                  const label = kind === "files" ? provider.labels.files : provider.displayName;
+                  return (
+                    <button
+                      key={provider.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => workspace.select({ [kind]: provider.id })}
+                      className={`text-left px-3.5 py-2 min-h-11 rounded-xl border text-xs font-semibold transition-colors cursor-pointer ${
+                        selected
+                          ? "bg-emerald-600 border-emerald-600 text-white shadow-xs"
+                          : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+                      }`}
+                      title={provider.isConfigured ? undefined : provider.setupHint}
+                    >
+                      <span className="block">{label}</span>
+                      {!provider.isConfigured && (
+                        <span className={`block text-[10px] font-medium ${selected ? "text-emerald-100" : "text-amber-700"}`}>
+                          Setup needed
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ))}
+        </div>
+
         {/* Feature Badges */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-5 border-t border-slate-100 mt-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
           <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
             <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800">
               <Mail className="w-4 h-4" />
@@ -807,8 +872,42 @@ export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({
               <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <HardDrive className="w-4 h-4" />
               </div>
-              <h3 className="text-base font-bold text-slate-900">Archive to Cloud Files</h3>
+              <h3 className="text-base font-bold text-slate-900">Archive to {labels.files}</h3>
             </div>
+
+            {/* Files can use a different provider than email & calendar, with its own sign-in */}
+            {workspace.filesNeedSeparateConnection && (
+              <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                <span className="min-w-0 truncate">
+                  {filesAccount ? (
+                    <>
+                      <span className="font-bold text-slate-900">{labels.files}:</span>{" "}
+                      <span className="text-slate-600">{filesAccount.email || filesAccount.name}</span>
+                    </>
+                  ) : (
+                    <span className="text-slate-600">{labels.files} is not connected</span>
+                  )}
+                </span>
+                {filesAccount ? (
+                  <button
+                    type="button"
+                    onClick={onDisconnectFiles}
+                    title={`Disconnect ${labels.files}`}
+                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onConnectFiles}
+                    className="px-3 min-h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl cursor-pointer whitespace-nowrap"
+                  >
+                    Connect {labels.files}
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 text-xs">
               <div className="flex items-center justify-between">
@@ -822,7 +921,7 @@ export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({
                 <span className="text-emerald-700 font-mono font-bold">Markdown (.md)</span>
               </div>
               <p className="text-[11px] text-slate-600 leading-relaxed pt-1">
-                Exports all parsed meeting intelligence, executive summaries, cap rate comparisons, and action items directly to your connected file storage.
+                Exports all parsed meeting intelligence, executive summaries, cap rate comparisons, and action items directly to your {labels.files}.
               </p>
             </div>
 
@@ -830,11 +929,11 @@ export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({
               <button
                 type="button"
                 onClick={handleInitiateExportFiles}
-                disabled={!user || !activeDeal || isLoggingIn}
+                disabled={!filesAccount || !activeDeal || isLoggingIn}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 <HardDrive className="w-4 h-4" />
-                <span>Save Debrief to Files</span>
+                <span>Save Debrief to {labels.files}</span>
               </button>
               <p className="text-[11px] text-slate-400 text-center mt-2">
                 Requires confirmation before saving.
@@ -847,7 +946,7 @@ export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <HardDrive className="w-4 h-4 text-emerald-600" />
-                <h3 className="text-sm font-bold text-slate-900">Deal Files</h3>
+                <h3 className="text-sm font-bold text-slate-900">Deal Files · {labels.files}</h3>
               </div>
               <div className="flex items-center gap-2">
                 <div className="relative">
@@ -864,7 +963,7 @@ export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({
                 <button
                   type="button"
                   onClick={loadFiles}
-                  disabled={isLoadingFiles || !user}
+                  disabled={isLoadingFiles || !filesAccount}
                   className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
                   title="Refresh files"
                 >
@@ -873,18 +972,18 @@ export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({
               </div>
             </div>
 
-            {!user ? (
+            {!filesAccount ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-3 bg-slate-50 rounded-xl border border-slate-200">
                 <HardDrive className="w-8 h-8 text-slate-400" />
                 <p className="text-xs text-slate-600">
-                  Connect your file storage to browse deal documents and briefs.
+                  Connect {labels.files} to browse deal documents and briefs.
                 </p>
                 <button
                   type="button"
-                  onClick={onSignIn}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl cursor-pointer"
+                  onClick={workspace.filesNeedSeparateConnection ? onConnectFiles : onSignIn}
+                  className="px-4 py-2 min-h-11 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl cursor-pointer"
                 >
-                  Connect Files
+                  Connect {labels.files}
                 </button>
               </div>
             ) : isLoadingFiles ? (

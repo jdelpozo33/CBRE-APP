@@ -185,17 +185,31 @@ apiApp.post("/api/webhooks/:id/test", async (req: Request, res: Response) => {
 // Speed mode applies when a request doesn't specify one.
 const currentSpeedMode = () => getSetting<"turbo" | "balanced">("speedMode", "balanced");
 
+// Which provider the broker uses for email & calendar and for files.
+const CONNECTION_OPTIONS = { mailCalendar: ["google", "microsoft"], files: ["google", "microsoft", "dropbox"] };
+const currentConnections = () =>
+  getSetting<{ mailCalendar: string; files: string }>("connections", { mailCalendar: "google", files: "google" });
+
+const settingsPayload = () => ({ speedMode: currentSpeedMode(), connections: currentConnections(), models: modelConfig });
+
 apiApp.get("/api/settings", (_req: Request, res: Response) => {
-  res.json({ speedMode: currentSpeedMode(), models: modelConfig });
+  res.json(settingsPayload());
 });
 
 apiApp.put("/api/settings", (req: Request, res: Response) => {
-  const { speedMode } = req.body;
-  if (speedMode !== "turbo" && speedMode !== "balanced") {
+  const { speedMode, connections } = req.body;
+  if (speedMode !== undefined && speedMode !== "turbo" && speedMode !== "balanced") {
     return res.status(400).json({ error: 'speedMode must be "turbo" or "balanced"' });
   }
-  setSetting("speedMode", speedMode);
-  res.json({ speedMode, models: modelConfig });
+  if (connections !== undefined) {
+    const valid =
+      CONNECTION_OPTIONS.mailCalendar.includes(connections?.mailCalendar) &&
+      CONNECTION_OPTIONS.files.includes(connections?.files);
+    if (!valid) return res.status(400).json({ error: "Unknown connection provider" });
+    setSetting("connections", { mailCalendar: connections.mailCalendar, files: connections.files });
+  }
+  if (speedMode !== undefined) setSetting("speedMode", speedMode);
+  res.json(settingsPayload());
 });
 
 // --- Global search across CRM, calls, notes, emails and market comps ---

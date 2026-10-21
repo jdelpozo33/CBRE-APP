@@ -53,7 +53,9 @@ function toStoredFile(file: DriveFileItem) {
 export const googleWorkspaceProvider: WorkspaceProvider = {
   id: PROVIDER_ID,
   displayName: "Google Workspace",
+  kinds: ["mailCalendar", "files"],
   labels: { email: "Gmail", calendar: "Google Calendar", files: "Google Drive" },
+  isConfigured: true,
 
   async connect() {
     const result = await googleSignIn();
