@@ -1,0 +1,10 @@
+{
+  "name": "DealPulse Brokerage Intelligence",
+  "description": "Commercial and residential brokerage workspace that transcribes meeting audio, queries deal and client databases, generates strategic valuation insights, and dispatches targeted next-step emails.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
