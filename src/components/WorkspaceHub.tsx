@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { User } from "firebase/auth";
 import {
   Mail,
   Calendar,
@@ -17,28 +16,12 @@ import {
   MapPin,
   Users,
 } from "lucide-react";
-import {
-  sendGmailMessage,
-  createGmailDraft,
-  fetchRecentGmailMessages,
-  GmailMessagePreview,
-} from "../services/gmailService.ts";
-import {
-  createCalendarEvent,
-  fetchUpcomingCalendarEvents,
-  CalendarEventItem,
-} from "../services/calendarService.ts";
-import {
-  uploadDealNoteToDrive,
-  listGoogleDriveFiles,
-  DriveFileItem,
-} from "../services/driveService.ts";
+import { workspace, ProviderAccount, CalendarEvent, EmailMessage, StoredFile } from "../providers/index.ts";
 import { WorkspaceConfirmAction } from "./WorkspaceConfirmModal.tsx";
 import { DealAnalysisResult, Contact } from "../types.ts";
 
-interface GoogleWorkspaceHubProps {
-  user: User | null;
-  token: string | null;
+interface WorkspaceHubProps {
+  user: ProviderAccount | null;
   onSignIn: () => Promise<void>;
   onSignOut: () => Promise<void>;
   isLoggingIn: boolean;
@@ -48,9 +31,8 @@ interface GoogleWorkspaceHubProps {
   contacts: Contact[];
 }
 
-export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
+export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({
   user,
-  token,
   onSignIn,
   onSignOut,
   isLoggingIn,
@@ -59,17 +41,18 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
   activeDeal,
   contacts,
 }) => {
-  const [activeTab, setActiveTab] = useState<"gmail" | "calendar" | "drive">("gmail");
+  const labels = workspace.labels;
+  const [activeTab, setActiveTab] = useState<"email" | "calendar" | "files">("email");
 
-  // Gmail State
-  const [gmailMessages, setGmailMessages] = useState<GmailMessagePreview[]>([]);
-  const [isLoadingGmail, setIsLoadingGmail] = useState(false);
+  // Email State
+  const [emailMessages, setEmailMessages] = useState<EmailMessage[]>([]);
+  const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const [composeRecipient, setComposeRecipient] = useState("");
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
 
   // Calendar State
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEventItem[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
   const [eventSummary, setEventSummary] = useState("");
   const [eventDate, setEventDate] = useState("");
@@ -79,10 +62,10 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
   const [eventAttendee, setEventAttendee] = useState("");
   const [eventNotes, setEventNotes] = useState("");
 
-  // Drive State
-  const [driveFiles, setDriveFiles] = useState<DriveFileItem[]>([]);
-  const [isLoadingDrive, setIsLoadingDrive] = useState(false);
-  const [driveSearch, setDriveSearch] = useState("");
+  // Files State
+  const [storedFiles, setStoredFiles] = useState<StoredFile[]>([]);
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  const [fileSearch, setFileSearch] = useState("");
 
   // Populate defaults when activeDeal changes
   useEffect(() => {
@@ -97,34 +80,34 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
       );
 
       setEventSummary(`Follow-up & Milestone Review: ${activeDeal.dealName}`);
-      setEventLocation(activeDeal.matchedListing?.address || "CBRE Conference Room / Google Meet");
+      setEventLocation(activeDeal.matchedListing?.address || "CBRE Conference Room / Video Call");
       setEventNotes(
         `Review contract milestones for ${activeDeal.dealName}.\nPurchase Price: ${activeDeal.financialTerms.purchasePrice}.\nKey action items: Escrow wire & PSA drafting.`
       );
     }
   }, [activeDeal]);
 
-  // Load Gmail messages
-  const loadGmail = async () => {
-    if (!token) return;
-    setIsLoadingGmail(true);
+  // Load recent emails
+  const loadEmail = async () => {
+    if (!user) return;
+    setIsLoadingEmail(true);
     try {
       const q = activeDeal ? activeDeal.dealName : "";
-      const msgs = await fetchRecentGmailMessages(q, 8);
-      setGmailMessages(msgs);
+      const msgs = await workspace.email.listRecent(q, 8);
+      setEmailMessages(msgs);
     } catch (err) {
-      console.error("Error loading Gmail messages:", err);
+      console.error("Error loading email messages:", err);
     } finally {
-      setIsLoadingGmail(false);
+      setIsLoadingEmail(false);
     }
   };
 
   // Load Calendar events
   const loadCalendar = async () => {
-    if (!token) return;
+    if (!user) return;
     setIsLoadingCalendar(true);
     try {
-      const events = await fetchUpcomingCalendarEvents(8);
+      const events = await workspace.calendar.listUpcomingEvents({ max: 8 });
       setCalendarEvents(events);
     } catch (err) {
       console.error("Error loading Calendar events:", err);
@@ -133,43 +116,43 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
     }
   };
 
-  // Load Drive files
-  const loadDrive = async () => {
-    if (!token) return;
-    setIsLoadingDrive(true);
+  // Load stored files
+  const loadFiles = async () => {
+    if (!user) return;
+    setIsLoadingFiles(true);
     try {
-      const files = await listGoogleDriveFiles(driveSearch, 12);
-      setDriveFiles(files);
+      const files = workspace.files ? await workspace.files.listFiles(fileSearch, 12) : [];
+      setStoredFiles(files);
     } catch (err) {
-      console.error("Error loading Drive files:", err);
+      console.error("Error loading files:", err);
     } finally {
-      setIsLoadingDrive(false);
+      setIsLoadingFiles(false);
     }
   };
 
   useEffect(() => {
-    if (token) {
-      if (activeTab === "gmail") loadGmail();
+    if (user) {
+      if (activeTab === "email") loadEmail();
       if (activeTab === "calendar") loadCalendar();
-      if (activeTab === "drive") loadDrive();
+      if (activeTab === "files") loadFiles();
     }
-  }, [token, activeTab]);
+  }, [user, activeTab]);
 
-  // Handle Send Email via Gmail with Mandatory Confirmation
-  const handleInitiateSendGmail = (isDraft: boolean = false) => {
+  // Handle Send Email with Mandatory Confirmation
+  const handleInitiateSendEmail = (isDraft: boolean = false) => {
     if (!composeRecipient || !composeSubject) {
       showNotification("Please specify both recipient email and subject.");
       return;
     }
 
     onRequestConfirm({
-      type: isDraft ? "gmail_draft" : "gmail_send",
-      title: isDraft ? "Save Gmail Draft" : "Send Email via Connected Gmail",
+      type: isDraft ? "email_draft" : "email_send",
+      title: isDraft ? "Save Email Draft" : "Send Email from Your Account",
       description: isDraft
-        ? "Create a new draft in your connected Google Workspace Gmail account."
-        : "Send this email directly from your authenticated Google Workspace address.",
+        ? `Create a new draft in your connected ${labels.email} account.`
+        : `Send this email directly from your connected ${labels.email} address.`,
       details: [
-        { label: "Sender Account", value: user?.email || "Connected Google User" },
+        { label: "Sender Account", value: user?.email || "Connected account" },
         { label: "Recipient", value: composeRecipient },
         { label: "Subject", value: composeSubject },
         { label: "Length", value: `${composeBody.length} characters` },
@@ -177,15 +160,15 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
       onConfirm: async () => {
         try {
           if (isDraft) {
-            await createGmailDraft(composeRecipient, composeSubject, composeBody);
-            showNotification(`Gmail draft created for ${composeRecipient}`);
+            await workspace.email.createDraft({ to: composeRecipient, subject: composeSubject, body: composeBody });
+            showNotification(`Draft created for ${composeRecipient}`);
           } else {
-            await sendGmailMessage(composeRecipient, composeSubject, composeBody);
-            showNotification(`Email successfully sent via Gmail to ${composeRecipient}`);
+            await workspace.email.send({ to: composeRecipient, subject: composeSubject, body: composeBody });
+            showNotification(`Email sent to ${composeRecipient}`);
           }
-          loadGmail();
+          loadEmail();
         } catch (err: any) {
-          alert(`Gmail API Error: ${err.message}`);
+          alert(`Email error: ${err.message}`);
         }
       },
       onCancel: () => {},
@@ -213,8 +196,8 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
 
     onRequestConfirm({
       type: "calendar_event",
-      title: "Schedule Google Calendar Event",
-      description: "Create an official event and milestone in your connected Google Calendar.",
+      title: "Schedule Calendar Event",
+      description: `Create an event and milestone in your connected ${labels.calendar}.`,
       details: [
         { label: "Event Title", value: eventSummary },
         { label: "Date & Time", value: `${selectedDate} at ${eventTime} (${durationMinutes} mins)` },
@@ -223,26 +206,26 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
       ],
       onConfirm: async () => {
         try {
-          const res = await createCalendarEvent({
-            summary: eventSummary,
+          await workspace.calendar.createEvent({
+            title: eventSummary,
             description: eventNotes,
             location: eventLocation,
-            startDateTime,
-            endDateTime,
+            start: startDateTime,
+            end: endDateTime,
             attendeeEmails: attendeesList,
           });
           showNotification(`Calendar event scheduled: "${eventSummary}"`);
           loadCalendar();
         } catch (err: any) {
-          alert(`Google Calendar API Error: ${err.message}`);
+          alert(`Calendar error: ${err.message}`);
         }
       },
       onCancel: () => {},
     });
   };
 
-  // Handle Export to Drive with Mandatory Confirmation
-  const handleInitiateExportDrive = () => {
+  // Handle Export to file storage with Mandatory Confirmation
+  const handleInitiateExportFiles = () => {
     if (!activeDeal) {
       showNotification("No active deal available to export.");
       return;
@@ -275,22 +258,23 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
     ].join("\n");
 
     onRequestConfirm({
-      type: "drive_upload",
-      title: "Save Brief to Google Drive",
-      description: "Upload a complete markdown briefing document to your Google Drive root folder.",
+      type: "file_upload",
+      title: "Save Brief to Cloud Files",
+      description: `Upload a complete markdown briefing document to your ${labels.files}.`,
       details: [
-        { label: "Target Account", value: user?.email || "Connected Google User" },
+        { label: "Target Account", value: user?.email || "Connected account" },
         { label: "File Name", value: `${filename}.md` },
         { label: "Format", value: "Markdown (text/markdown)" },
         { label: "Deal Reference", value: activeDeal.dealName },
       ],
       onConfirm: async () => {
         try {
-          const res = await uploadDealNoteToDrive(filename, markdownContent, activeDeal.dealName);
-          showNotification(`Saved "${filename}.md" to Google Drive`);
-          loadDrive();
+          if (!workspace.files) throw new Error("Your connected account does not support file storage.");
+          await workspace.files.uploadNote(filename, markdownContent, activeDeal.dealName);
+          showNotification(`Saved "${filename}.md" to ${labels.files}`);
+          loadFiles();
         } catch (err: any) {
-          alert(`Google Drive API Error: ${err.message}`);
+          alert(`File upload error: ${err.message}`);
         }
       },
       onCancel: () => {},
@@ -299,13 +283,13 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Google Workspace Connection Banner */}
+      {/* Calendar & Email Connection Banner */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 px-2.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200">
-                1P Google Workspace
+                Calendar & Email Connection
               </span>
               {user && (
                 <span className="flex items-center gap-1.5 text-xs text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
@@ -315,7 +299,7 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
               )}
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              Gmail, Google Calendar & Google Drive
+              {user ? workspace.displayName : "Connect your calendar & email"}
             </h2>
           </div>
 
@@ -323,20 +307,20 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
           <div className="shrink-0">
             {user ? (
               <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-2.5 rounded-xl">
-                {user.photoURL ? (
+                {user.photoUrl ? (
                   <img
-                    src={user.photoURL}
-                    alt={user.displayName || "User"}
+                    src={user.photoUrl}
+                    alt={user.name || "User"}
                     className="w-9 h-9 rounded-full border border-emerald-500"
                   />
                 ) : (
                   <div className="w-9 h-9 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs">
-                    {user.email ? user.email.substring(0, 2).toUpperCase() : "GW"}
+                    {(user.email || user.name).substring(0, 2).toUpperCase()}
                   </div>
                 )}
                 <div className="text-left">
                   <div className="text-xs font-bold text-slate-900 truncate max-w-[170px]">
-                    {user.displayName || "Google Workspace User"}
+                    {user.name}
                   </div>
                   <div className="text-[11px] text-slate-500 truncate max-w-[170px]">
                     {user.email}
@@ -345,7 +329,7 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
                 <button
                   type="button"
                   onClick={onSignOut}
-                  title="Sign out of Google Workspace"
+                  title={`Disconnect ${workspace.displayName}`}
                   className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors ml-1 cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
@@ -353,43 +337,18 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
               </div>
             ) : (
               <div>
-                {/* Official Sign in with Google Button */}
                 <button
                   type="button"
                   onClick={onSignIn}
                   disabled={isLoggingIn}
-                  className="gsi-material-button group cursor-pointer inline-flex items-center justify-center bg-white hover:bg-slate-50 text-slate-800 font-semibold px-4 py-2 rounded-xl shadow-xs hover:shadow-sm transition-all border border-slate-200 disabled:opacity-60 text-xs sm:text-sm"
+                  className="cursor-pointer inline-flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-800 font-semibold px-4 py-2.5 rounded-xl shadow-xs hover:shadow-sm transition-all border border-slate-200 disabled:opacity-60 text-xs sm:text-sm min-h-11"
                 >
-                  <div className="w-5 h-5 mr-3 shrink-0">
-                    <svg
-                      version="1.1"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 48 48"
-                      className="w-full h-full"
-                    >
-                      <path
-                        fill="#EA4335"
-                        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-                      />
-                      <path
-                        fill="#4285F4"
-                        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-                      />
-                      <path
-                        fill="#FBBC05"
-                        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-                      />
-                      <path
-                        fill="#34A853"
-                        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-                      />
-                      <path fill="none" d="M0 0h48v48H0z" />
-                    </svg>
-                  </div>
+                  <Mail className="w-4 h-4 text-emerald-600" />
                   <span className="font-bold text-slate-800">
-                    {isLoggingIn ? "Signing in..." : "Sign in with Google"}
+                    {isLoggingIn ? "Connecting..." : `Connect ${workspace.displayName}`}
                   </span>
                 </button>
+                <p className="text-[11px] text-slate-500 mt-1.5">More providers (e.g. Microsoft 365) can be added later.</p>
               </div>
             )}
           </div>
@@ -401,21 +360,21 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
             <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800">
               <Mail className="w-4 h-4" />
             </div>
-            <div className="text-xs font-bold text-slate-800">Gmail Integration</div>
+            <div className="text-xs font-bold text-slate-800">Email · {labels.email}</div>
           </div>
 
           <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
             <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800">
               <Calendar className="w-4 h-4" />
             </div>
-            <div className="text-xs font-bold text-slate-800">Google Calendar</div>
+            <div className="text-xs font-bold text-slate-800">Calendar · {labels.calendar}</div>
           </div>
 
           <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
             <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800">
               <HardDrive className="w-4 h-4" />
             </div>
-            <div className="text-xs font-bold text-slate-800">Google Drive</div>
+            <div className="text-xs font-bold text-slate-800">Files · {labels.files}</div>
           </div>
         </div>
       </div>
@@ -424,15 +383,15 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
       <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
         <button
           type="button"
-          onClick={() => setActiveTab("gmail")}
+          onClick={() => setActiveTab("email")}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === "gmail"
+            activeTab === "email"
               ? "bg-emerald-600 text-white shadow-xs"
               : "bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-100 border border-slate-200"
           }`}
         >
           <Mail className="w-4 h-4" />
-          <span>Gmail Dispatcher</span>
+          <span>Email</span>
         </button>
 
         <button
@@ -445,25 +404,25 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
           }`}
         >
           <Calendar className="w-4 h-4" />
-          <span>Google Calendar</span>
+          <span>Calendar</span>
         </button>
 
         <button
           type="button"
-          onClick={() => setActiveTab("drive")}
+          onClick={() => setActiveTab("files")}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === "drive"
+            activeTab === "files"
               ? "bg-emerald-600 text-white shadow-xs"
               : "bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-100 border border-slate-200"
           }`}
         >
           <HardDrive className="w-4 h-4" />
-          <span>Google Drive</span>
+          <span>Files</span>
         </button>
       </div>
 
-      {/* Gmail Section */}
-      {activeTab === "gmail" && (
+      {/* Email Section */}
+      {activeTab === "email" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Direct Send Form */}
           <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-sm">
@@ -472,7 +431,7 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
                 <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <Send className="w-4 h-4" />
                 </div>
-                <h3 className="text-base font-bold text-slate-900">Send Email via Gmail</h3>
+                <h3 className="text-base font-bold text-slate-900">Send Email</h3>
               </div>
             </div>
 
@@ -549,7 +508,7 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleInitiateSendGmail(true)}
+                  onClick={() => handleInitiateSendEmail(true)}
                   disabled={!user || isLoggingIn}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-colors disabled:opacity-50 cursor-pointer"
                 >
@@ -557,32 +516,32 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleInitiateSendGmail(false)}
+                  onClick={() => handleInitiateSendEmail(false)}
                   disabled={!user || isLoggingIn}
                   className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>Send via Gmail</span>
+                  <span>Send from My Email</span>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Recent Gmail Messages Feed */}
+          {/* Recent Email Feed */}
           <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-sm flex flex-col">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-emerald-600" />
-                <h3 className="text-sm font-bold text-slate-900">Recent Gmail Activity</h3>
+                <h3 className="text-sm font-bold text-slate-900">Recent Email Activity</h3>
               </div>
               <button
                 type="button"
-                onClick={loadGmail}
-                disabled={isLoadingGmail || !user}
+                onClick={loadEmail}
+                disabled={isLoadingEmail || !user}
                 className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
                 title="Refresh messages"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingGmail ? "animate-spin" : ""}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingEmail ? "animate-spin" : ""}`} />
               </button>
             </div>
 
@@ -590,28 +549,28 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-3 bg-slate-50 rounded-xl border border-slate-200">
                 <Mail className="w-8 h-8 text-slate-400" />
                 <p className="text-xs text-slate-600">
-                  Sign in with Google to view recent deal correspondence.
+                  Connect your email account to view recent deal correspondence.
                 </p>
                 <button
                   type="button"
                   onClick={onSignIn}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl cursor-pointer"
                 >
-                  Connect Gmail
+                  Connect Email
                 </button>
               </div>
-            ) : isLoadingGmail ? (
+            ) : isLoadingEmail ? (
               <div className="flex-1 flex items-center justify-center p-12 text-xs text-slate-500">
                 <RefreshCw className="w-4 h-4 animate-spin mr-2 text-emerald-600" />
                 Loading recent emails...
               </div>
-            ) : gmailMessages.length === 0 ? (
+            ) : emailMessages.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
                 <span>No recent emails found.</span>
               </div>
             ) : (
               <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
-                {gmailMessages.map((msg) => (
+                {emailMessages.map((msg) => (
                   <div
                     key={msg.id}
                     className="p-3 bg-slate-50 hover:bg-emerald-50/40 border border-slate-200/80 rounded-xl space-y-1.5 transition-colors text-left"
@@ -634,7 +593,7 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
         </div>
       )}
 
-      {/* Google Calendar Section */}
+      {/* Calendar Section */}
       {activeTab === "calendar" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Quick Schedule Form */}
@@ -643,7 +602,7 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
               <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <Calendar className="w-4 h-4" />
               </div>
-              <h3 className="text-base font-bold text-slate-900">Schedule on Google Calendar</h3>
+              <h3 className="text-base font-bold text-slate-900">Schedule on Calendar</h3>
             </div>
 
             <div>
@@ -702,7 +661,7 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
                 type="text"
                 value={eventLocation}
                 onChange={(e) => setEventLocation(e.target.value)}
-                placeholder="1420 Market Street, San Francisco, CA or Google Meet"
+                placeholder="1420 Market Street, San Francisco, CA or video call link"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 focus:bg-white"
               />
             </div>
@@ -771,7 +730,7 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-3 bg-slate-50 rounded-xl border border-slate-200">
                 <Calendar className="w-8 h-8 text-slate-400" />
                 <p className="text-xs text-slate-600">
-                  Connect Google Calendar to see your upcoming meetings.
+                  Connect your calendar to see your upcoming meetings.
                 </p>
                 <button
                   type="button"
@@ -799,11 +758,11 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
                   >
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="font-bold text-emerald-800 truncate max-w-[200px]">
-                        {evt.summary}
+                        {evt.title}
                       </span>
-                      {evt.htmlLink && (
+                      {evt.link && (
                         <a
-                          href={evt.htmlLink}
+                          href={evt.link}
                           target="_blank"
                           rel="noreferrer"
                           className="text-slate-400 hover:text-slate-700 flex items-center gap-1"
@@ -815,14 +774,14 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
                     <div className="text-[11px] text-slate-600 flex items-center gap-1.5">
                       <Clock className="w-3 h-3 text-slate-400 shrink-0" />
                       <span>
-                        {evt.start.dateTime
-                          ? new Date(evt.start.dateTime).toLocaleString([], {
+                        {evt.allDay
+                          ? new Date(evt.start).toLocaleDateString([], { month: "short", day: "numeric" })
+                          : new Date(evt.start).toLocaleString([], {
                               month: "short",
                               day: "numeric",
                               hour: "2-digit",
                               minute: "2-digit",
-                            })
-                          : evt.start.date}
+                            })}
                       </span>
                     </div>
                     {evt.location && (
@@ -839,8 +798,8 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
         </div>
       )}
 
-      {/* Google Drive Section */}
-      {activeTab === "drive" && (
+      {/* Files Section */}
+      {activeTab === "files" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Export Debrief Card */}
           <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-sm">
@@ -848,7 +807,7 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
               <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <HardDrive className="w-4 h-4" />
               </div>
-              <h3 className="text-base font-bold text-slate-900">Archive to Google Drive</h3>
+              <h3 className="text-base font-bold text-slate-900">Archive to Cloud Files</h3>
             </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 text-xs">
@@ -863,19 +822,19 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
                 <span className="text-emerald-700 font-mono font-bold">Markdown (.md)</span>
               </div>
               <p className="text-[11px] text-slate-600 leading-relaxed pt-1">
-                Exports all parsed meeting intelligence, executive summaries, cap rate comparisons, and action items directly to your personal Google Drive folder.
+                Exports all parsed meeting intelligence, executive summaries, cap rate comparisons, and action items directly to your connected file storage.
               </p>
             </div>
 
             <div className="pt-2">
               <button
                 type="button"
-                onClick={handleInitiateExportDrive}
+                onClick={handleInitiateExportFiles}
                 disabled={!user || !activeDeal || isLoggingIn}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 <HardDrive className="w-4 h-4" />
-                <span>Save Debrief to Google Drive</span>
+                <span>Save Debrief to Files</span>
               </button>
               <p className="text-[11px] text-slate-400 text-center mt-2">
                 Requires confirmation before saving.
@@ -883,33 +842,33 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
             </div>
           </div>
 
-          {/* Drive Files Browser */}
+          {/* Files Browser */}
           <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-sm flex flex-col">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <HardDrive className="w-4 h-4 text-emerald-600" />
-                <h3 className="text-sm font-bold text-slate-900">Google Drive Deal Files</h3>
+                <h3 className="text-sm font-bold text-slate-900">Deal Files</h3>
               </div>
               <div className="flex items-center gap-2">
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
                   <input
                     type="text"
-                    value={driveSearch}
-                    onChange={(e) => setDriveSearch(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && loadDrive()}
-                    placeholder="Search drive..."
+                    value={fileSearch}
+                    onChange={(e) => setFileSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && loadFiles()}
+                    placeholder="Search files..."
                     className="bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-emerald-500 focus:bg-white w-36 sm:w-44"
                   />
                 </div>
                 <button
                   type="button"
-                  onClick={loadDrive}
-                  disabled={isLoadingDrive || !user}
+                  onClick={loadFiles}
+                  disabled={isLoadingFiles || !user}
                   className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
                   title="Refresh files"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingDrive ? "animate-spin" : ""}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingFiles ? "animate-spin" : ""}`} />
                 </button>
               </div>
             </div>
@@ -918,28 +877,28 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-3 bg-slate-50 rounded-xl border border-slate-200">
                 <HardDrive className="w-8 h-8 text-slate-400" />
                 <p className="text-xs text-slate-600">
-                  Connect Google Drive to browse deal documents and briefs.
+                  Connect your file storage to browse deal documents and briefs.
                 </p>
                 <button
                   type="button"
                   onClick={onSignIn}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl cursor-pointer"
                 >
-                  Connect Google Drive
+                  Connect Files
                 </button>
               </div>
-            ) : isLoadingDrive ? (
+            ) : isLoadingFiles ? (
               <div className="flex-1 flex items-center justify-center p-12 text-xs text-slate-500">
                 <RefreshCw className="w-4 h-4 animate-spin mr-2 text-emerald-600" />
-                Loading Drive files...
+                Loading files...
               </div>
-            ) : driveFiles.length === 0 ? (
+            ) : storedFiles.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
-                <span>No Google Drive files found matching search.</span>
+                <span>No files found matching search.</span>
               </div>
             ) : (
               <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-                {driveFiles.map((file) => (
+                {storedFiles.map((file) => (
                   <div
                     key={file.id}
                     className="p-3 bg-slate-50 hover:bg-emerald-50/40 border border-slate-200/80 rounded-xl flex items-center justify-between gap-3 transition-colors text-left"
@@ -955,9 +914,9 @@ export const GoogleWorkspaceHub: React.FC<GoogleWorkspaceHubProps> = ({
                         </span>
                       </div>
                     </div>
-                    {file.webViewLink && (
+                    {file.link && (
                       <a
-                        href={file.webViewLink}
+                        href={file.link}
                         target="_blank"
                         rel="noreferrer"
                         className="px-2.5 py-1 bg-white hover:bg-slate-100 text-emerald-700 text-[11px] font-semibold rounded-lg border border-slate-200 flex items-center gap-1 shrink-0 transition-colors"

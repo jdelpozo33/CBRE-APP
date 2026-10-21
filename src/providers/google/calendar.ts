@@ -1,4 +1,4 @@
-import { getAccessToken } from './googleAuth.ts';
+import { getAccessToken } from './auth.ts';
 
 export interface CalendarEventPayload {
   summary: string;
@@ -74,15 +74,17 @@ export async function createCalendarEvent(
  * Fetch upcoming calendar events for the broker.
  */
 export async function fetchUpcomingCalendarEvents(
-  maxResults: number = 8
+  maxResults: number = 8,
+  from: Date = new Date(),
+  to?: Date
 ): Promise<CalendarEventItem[]> {
   const token = await getAccessToken();
   if (!token) return [];
 
-  const timeMin = new Date().toISOString();
+  const timeMax = to ? `&timeMax=${encodeURIComponent(to.toISOString())}` : '';
   const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(
-    timeMin
-  )}&maxResults=${maxResults}&orderBy=startTime&singleEvents=true`;
+    from.toISOString()
+  )}${timeMax}&maxResults=${maxResults}&orderBy=startTime&singleEvents=true`;
 
   const res = await fetch(url, {
     headers: {

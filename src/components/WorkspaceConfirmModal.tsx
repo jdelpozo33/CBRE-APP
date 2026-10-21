@@ -2,7 +2,7 @@ import React from "react";
 import { AlertTriangle, Mail, Calendar, HardDrive, Check, X } from "lucide-react";
 
 export interface WorkspaceConfirmAction {
-  type: "gmail_send" | "gmail_draft" | "calendar_event" | "drive_upload" | "drive_delete";
+  type: "email_send" | "email_draft" | "calendar_event" | "file_upload" | "file_delete";
   title: string;
   description: string;
   details: { label: string; value: string }[];
@@ -20,13 +20,13 @@ export const WorkspaceConfirmModal: React.FC<WorkspaceConfirmModalProps> = ({ ac
 
   const getIcon = () => {
     switch (action.type) {
-      case "gmail_send":
-      case "gmail_draft":
+      case "email_send":
+      case "email_draft":
         return <Mail className="w-5 h-5 text-emerald-600" />;
       case "calendar_event":
         return <Calendar className="w-5 h-5 text-emerald-600" />;
-      case "drive_upload":
-      case "drive_delete":
+      case "file_upload":
+      case "file_delete":
         return <HardDrive className="w-5 h-5 text-emerald-600" />;
       default:
         return <AlertTriangle className="w-5 h-5 text-amber-500" />;
@@ -35,12 +35,12 @@ export const WorkspaceConfirmModal: React.FC<WorkspaceConfirmModalProps> = ({ ac
 
   const getConfirmButtonColor = () => {
     switch (action.type) {
-      case "drive_delete":
+      case "file_delete":
         return "bg-rose-600 hover:bg-rose-700 text-white font-bold";
-      case "gmail_send":
-      case "gmail_draft":
+      case "email_send":
+      case "email_draft":
       case "calendar_event":
-      case "drive_upload":
+      case "file_upload":
       default:
         return "bg-emerald-600 hover:bg-emerald-700 text-white font-bold";
     }
@@ -49,15 +49,15 @@ export const WorkspaceConfirmModal: React.FC<WorkspaceConfirmModalProps> = ({ ac
   const getConfirmLabel = () => {
     if (action.isProcessing) return "Executing...";
     switch (action.type) {
-      case "gmail_send":
-        return "Confirm & Send via Gmail";
-      case "gmail_draft":
+      case "email_send":
+        return "Confirm & Send";
+      case "email_draft":
         return "Confirm & Save Draft";
       case "calendar_event":
         return "Confirm & Schedule in Calendar";
-      case "drive_upload":
-        return "Confirm & Save to Drive";
-      case "drive_delete":
+      case "file_upload":
+        return "Confirm & Save File";
+      case "file_delete":
         return "Confirm & Delete";
       default:
         return "Confirm Action";
@@ -96,7 +96,7 @@ export const WorkspaceConfirmModal: React.FC<WorkspaceConfirmModalProps> = ({ ac
         </div>
 
         <p className="text-[11px] text-slate-400">
-          This operation will update your connected Google Workspace data with explicit authorization.
+          This operation will update your connected calendar, email or file account with your explicit authorization.
         </p>
 
         {/* Buttons */}

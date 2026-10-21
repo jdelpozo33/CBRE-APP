@@ -115,3 +115,21 @@ seed("listings", initialListings);
 seed("comps", initialComps);
 seed("messages", dispatchedMessagesLog);
 seed("activity_logs", initialActivityLogs);
+
+// Tag every stored record with where it came from (records created before tagging existed).
+function backfillSource<T extends WithId & { source?: string }>(
+  collection: Collection,
+  sourceFor: (record: T) => string
+) {
+  for (const record of listRecords<T>(collection)) {
+    if (!record.source) updateRecord<T>(collection, record.id, { source: sourceFor(record) } as Partial<T>);
+  }
+}
+
+backfillSource("contacts", () => "CRM");
+backfillSource("listings", () => "CRM");
+backfillSource("comps", () => "External");
+backfillSource("messages", () => "Email");
+backfillSource<WithId & { source?: string; type?: string }>("activity_logs", (log) =>
+  log.type === "call" ? "Call" : "Note"
+);

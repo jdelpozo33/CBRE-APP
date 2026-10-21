@@ -7,7 +7,7 @@ import {
   User,
   signOut,
 } from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
+import firebaseConfig from '../../../firebase-applet-config.json';
 
 // Reuse existing app if already initialized
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];

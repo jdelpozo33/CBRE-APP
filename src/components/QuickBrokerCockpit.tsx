@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { User } from "firebase/auth";
+import type { ProviderAccount } from "../providers/index.ts";
 import {
   Zap,
   Mic,
@@ -26,7 +26,7 @@ interface QuickBrokerCockpitProps {
   activeDeal: DealAnalysisResult | null;
   pendingCommsCount: number;
   contacts: Contact[];
-  user: User | null;
+  user: ProviderAccount | null;
   onOpenDealMemo: () => void;
   onQuickLogCall: (log: Partial<QuickActivityLog>) => Promise<void>;
   onQuickScheduleCalendar: (title: string, deadline?: string) => void;
@@ -298,7 +298,7 @@ export const QuickBrokerCockpit: React.FC<QuickBrokerCockpitProps> = ({
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-emerald-600" />
-                <h3 className="text-sm font-bold text-slate-900">Schedule on Google Calendar</h3>
+                <h3 className="text-sm font-bold text-slate-900">Schedule on Calendar</h3>
               </div>
               <button
                 type="button"

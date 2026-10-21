@@ -50,6 +50,7 @@ apiApp.post("/api/activity-logs", (req: Request, res: Response) => {
     notes: req.body.notes || "",
     timestamp,
     followUpDate: req.body.followUpDate || "Within 24 Hours",
+    source: (req.body.type || "call") === "call" ? "Call" : "Note",
   };
 
   insertRecord("activity_logs", newLog);
@@ -66,6 +67,7 @@ apiApp.post("/api/contacts", (req: Request, res: Response) => {
     phone: req.body.phone || "",
     notes: req.body.notes || "",
     preferredChannel: req.body.preferredChannel || "email",
+    source: "CRM",
   };
   insertRecord("contacts", newContact);
   res.json({ success: true, contact: newContact });
@@ -87,6 +89,7 @@ apiApp.post("/api/listings", (req: Request, res: Response) => {
     zoning: req.body.zoning || "Commercial",
     status: req.body.status || "Active Listing",
     summary: req.body.summary || "",
+    source: "CRM",
   };
   insertRecord("listings", newListing);
   res.json({ success: true, listing: newListing });
@@ -595,6 +598,7 @@ Provide a concise, executive briefing with bulleted data points.`;
       summary,
       searchQueries,
       sources: sources.slice(0, 6),
+      source: "External",
     };
     setCached(cacheKey, resultData);
 
@@ -689,6 +693,7 @@ apiApp.post("/api/send-message", (req: Request, res: Response) => {
     status: "Delivered",
     timestamp,
     dealReference: dealReference || "Brokerage Deal",
+    source: "Email",
   };
 
   insertRecord("messages", newMessage);

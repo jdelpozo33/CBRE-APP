@@ -18,15 +18,9 @@ import {
   Globe,
   CheckCheck,
 } from "lucide-react";
-import { User } from "firebase/auth";
 import { StakeholderCommunication, Contact, DispatchedMessage } from "../types.ts";
 import { WorkspaceConfirmAction } from "./WorkspaceConfirmModal.tsx";
-import {
-  sendGmailMessage,
-  createGmailDraft,
-  createBatchGmailDrafts,
-  sendBatchGmailMessages,
-} from "../services/gmailService.ts";
+import { workspace, ProviderAccount, sendEmailBatch, draftEmailBatch } from "../providers/index.ts";
 import { Phone, Share2 } from "lucide-react";
 
 interface CommunicationsHubProps {
@@ -35,7 +29,7 @@ interface CommunicationsHubProps {
   onMessageDispatched: (msg: DispatchedMessage) => void;
   contacts: Contact[];
   onLoadSampleDebrief?: () => void;
-  user?: User | null;
+  user?: ProviderAccount | null;
   onRequestConfirm?: (action: WorkspaceConfirmAction) => void;
 }
 
@@ -189,19 +183,19 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
     setTimeout(() => setStatusFeedback(null), 4000);
   };
 
-  const handleSendDirectGmail = (comm: StakeholderCommunication) => {
+  const handleSendFromAccount = (comm: StakeholderCommunication) => {
     if (!user) {
-      alert("Please sign in with Google in the Google Workspace tab to send directly from your Gmail account.");
+      alert("Connect your email account in the Connections tab to send from your own address.");
       return;
     }
     if (!onRequestConfirm) return;
 
     onRequestConfirm({
-      type: "gmail_send",
-      title: "Send via Connected Gmail Account",
-      description: "Send this deal communication directly through the official Gmail API from your authenticated Google Workspace address.",
+      type: "email_send",
+      title: "Send from Your Email Account",
+      description: "Send this deal communication from your connected email address.",
       details: [
-        { label: "From", value: user.email || "Connected Google Workspace" },
+        { label: "From", value: user.email || user.name },
         { label: "To", value: `${comm.recipientName} <${comm.recipientEmail}>` },
         { label: "Subject", value: comm.subject },
         { label: "Transaction", value: dealName },
@@ -209,25 +203,23 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
       onConfirm: async () => {
         try {
           setSendingId(comm.id);
-          const result = await sendGmailMessage(comm.recipientEmail, comm.subject, comm.body);
-          if (result.success) {
-            handleUpdateComm(comm.id, "status", "Delivered");
-            onMessageDispatched({
-              id: `gmail-${result.id || Date.now()}`,
-              recipientEmail: comm.recipientEmail,
-              recipientName: `${comm.recipientName} (${comm.recipientRole})`,
-              subject: comm.subject,
-              body: comm.body,
-              type: "email",
-              status: "Delivered",
-              timestamp: new Date().toLocaleTimeString(),
-              dealReference: dealName,
-            });
-            setStatusFeedback(`Email sent via Gmail API to ${comm.recipientName}!`);
-            setTimeout(() => setStatusFeedback(null), 3500);
-          }
+          const result = await workspace.email.send({ to: comm.recipientEmail, subject: comm.subject, body: comm.body });
+          handleUpdateComm(comm.id, "status", "Delivered");
+          onMessageDispatched({
+            id: `email-${result.id || Date.now()}`,
+            recipientEmail: comm.recipientEmail,
+            recipientName: `${comm.recipientName} (${comm.recipientRole})`,
+            subject: comm.subject,
+            body: comm.body,
+            type: "email",
+            status: "Delivered",
+            timestamp: new Date().toLocaleTimeString(),
+            dealReference: dealName,
+          });
+          setStatusFeedback(`Email sent to ${comm.recipientName}!`);
+          setTimeout(() => setStatusFeedback(null), 3500);
         } catch (err: any) {
-          alert(`Gmail send error: ${err.message}`);
+          alert(`Email send error: ${err.message}`);
         } finally {
           setSendingId(null);
         }
@@ -236,19 +228,19 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
     });
   };
 
-  const handleDraftDirectGmail = (comm: StakeholderCommunication) => {
+  const handleDraftToAccount = (comm: StakeholderCommunication) => {
     if (!user) {
-      alert("Please sign in with Google in the Google Workspace tab to draft directly into your Gmail account.");
+      alert("Connect your email account in the Connections tab to save drafts.");
       return;
     }
     if (!onRequestConfirm) return;
 
     onRequestConfirm({
-      type: "gmail_draft",
-      title: "Save Draft to Gmail Account",
-      description: "Create an official draft message in your connected Gmail account so you can review and polish before sending.",
+      type: "email_draft",
+      title: "Save Draft to Your Email Account",
+      description: "Create a draft in your connected email account so you can review and polish before sending.",
       details: [
-        { label: "Account", value: user.email || "Connected Google Workspace" },
+        { label: "Account", value: user.email || user.name },
         { label: "To", value: `${comm.recipientName} <${comm.recipientEmail}>` },
         { label: "Subject", value: comm.subject },
         { label: "Deal", value: dealName },
@@ -256,13 +248,11 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
       onConfirm: async () => {
         try {
           setSendingId(comm.id);
-          const result = await createGmailDraft(comm.recipientEmail, comm.subject, comm.body);
-          if (result.success) {
-            setStatusFeedback(`Saved draft in your Gmail account for ${comm.recipientName}!`);
-            setTimeout(() => setStatusFeedback(null), 3500);
-          }
+          await workspace.email.createDraft({ to: comm.recipientEmail, subject: comm.subject, body: comm.body });
+          setStatusFeedback(`Saved draft in your email account for ${comm.recipientName}!`);
+          setTimeout(() => setStatusFeedback(null), 3500);
         } catch (err: any) {
-          alert(`Gmail draft error: ${err.message}`);
+          alert(`Email draft error: ${err.message}`);
         } finally {
           setSendingId(null);
         }
@@ -271,9 +261,9 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
     });
   };
 
-  const handleBatchSaveToGmailDrafts = () => {
+  const handleBatchSaveDrafts = () => {
     if (!user) {
-      alert("Please sign in with Google in the Google Workspace tab to batch save drafts into Gmail.");
+      alert("Connect your email account in the Connections tab to save drafts.");
       return;
     }
     if (!onRequestConfirm) return;
@@ -285,11 +275,11 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
     }));
 
     onRequestConfirm({
-      type: "gmail_draft",
-      title: `Batch Save ${comms.length} Drafts to Gmail`,
-      description: `Create official draft messages in your connected Gmail account for all ${comms.length} deal stakeholders.`,
+      type: "email_draft",
+      title: `Save ${comms.length} Drafts to Your Email Account`,
+      description: `Create draft messages in your connected email account for all ${comms.length} deal stakeholders.`,
       details: [
-        { label: "Account", value: user.email || "Connected Google Workspace" },
+        { label: "Account", value: user.email || user.name },
         { label: "Total Drafts", value: `${comms.length} stakeholders` },
         { label: "Recipients", value: comms.map((c) => c.recipientName).join(", ") },
         { label: "Deal", value: dealName },
@@ -297,9 +287,9 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
       onConfirm: async () => {
         try {
           setIsSendingAll(true);
-          const result = await createBatchGmailDrafts(draftsPayload);
-          if (result.createdCount > 0) {
-            setStatusFeedback(`⚡ Successfully created ${result.createdCount} drafts in your Gmail account!`);
+          const result = await draftEmailBatch(draftsPayload);
+          if (result.count > 0) {
+            setStatusFeedback(`⚡ Created ${result.count} drafts in your email account!`);
             setTimeout(() => setStatusFeedback(null), 4000);
           }
         } catch (err: any) {
@@ -312,9 +302,9 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
     });
   };
 
-  const handleBatchSendViaGmail = () => {
+  const handleBatchSendFromAccount = () => {
     if (!user) {
-      alert("Please sign in with Google in the Google Workspace tab to send via your connected Gmail.");
+      alert("Connect your email account in the Connections tab to send from your own address.");
       return;
     }
     if (!onRequestConfirm) return;
@@ -334,11 +324,11 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
     }
 
     onRequestConfirm({
-      type: "gmail_send",
-      title: `Batch Send ${messagesPayload.length} Emails via Gmail API`,
-      description: `Dispatches official emails through your connected Gmail account to all remaining pending stakeholders.`,
+      type: "email_send",
+      title: `Send ${messagesPayload.length} Emails from Your Account`,
+      description: `Sends emails from your connected email account to all remaining pending stakeholders.`,
       details: [
-        { label: "From", value: user.email || "Connected Google Workspace" },
+        { label: "From", value: user.email || user.name },
         { label: "Total Emails", value: `${messagesPayload.length} recipients` },
         { label: "Recipients", value: messagesPayload.map((m) => m.to).join(", ") },
         { label: "Deal", value: dealName },
@@ -346,12 +336,12 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
       onConfirm: async () => {
         try {
           setIsSendingAll(true);
-          const result = await sendBatchGmailMessages(messagesPayload);
-          if (result.sentCount > 0) {
+          const result = await sendEmailBatch(messagesPayload);
+          if (result.count > 0) {
             setComms((prev) => prev.map((c) => ({ ...c, status: "Delivered" })));
             comms.forEach((c) => {
               onMessageDispatched({
-                id: `gmail-batch-${Date.now()}-${c.id}`,
+                id: `email-batch-${Date.now()}-${c.id}`,
                 recipientEmail: c.recipientEmail,
                 recipientName: `${c.recipientName} (${c.recipientRole})`,
                 subject: c.subject,
@@ -362,7 +352,7 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
                 dealReference: dealName,
               });
             });
-            setStatusFeedback(`🚀 Successfully sent ${result.sentCount} emails via Gmail API!`);
+            setStatusFeedback(`🚀 Sent ${result.count} emails from your account!`);
             setTimeout(() => setStatusFeedback(null), 4000);
           }
         } catch (err: any) {
@@ -438,24 +428,24 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
               <>
                 <button
                   type="button"
-                  onClick={handleBatchSaveToGmailDrafts}
+                  onClick={handleBatchSaveDrafts}
                   disabled={isSendingAll}
                   className="flex items-center gap-1.5 py-2 px-3.5 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-semibold rounded-xl border border-amber-200 transition-all cursor-pointer disabled:opacity-50"
-                  title="Creates real draft messages for all 4 stakeholders in your Gmail account"
+                  title="Creates draft messages for all stakeholders in your email account"
                 >
                   <Mail className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Save All as Gmail Drafts</span>
+                  <span>Save All as Drafts</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={handleBatchSendViaGmail}
+                  onClick={handleBatchSendFromAccount}
                   disabled={isSendingAll}
                   className="flex items-center gap-1.5 py-2 px-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-xl border border-emerald-200 transition-all cursor-pointer disabled:opacity-50"
-                  title="Batch sends all pending stakeholder emails directly via Gmail API"
+                  title="Sends all pending stakeholder emails from your email account"
                 >
                   <Send className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Send All via Gmail</span>
+                  <span>Send All from My Email</span>
                 </button>
               </>
             )}
@@ -550,9 +540,9 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
           const currentMode = activeTab[comm.id] || "email";
           const isEditing = editingId === comm.id;
 
-          const gmailHref = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
-            comm.recipientEmail
-          )}&su=${encodeURIComponent(comm.subject)}&body=${encodeURIComponent(comm.body)}`;
+          const mailtoHref = `mailto:${encodeURIComponent(comm.recipientEmail)}?subject=${encodeURIComponent(
+            comm.subject
+          )}&body=${encodeURIComponent(comm.body)}`;
 
           const outlookHref = `https://outlook.live.com/mail/0/deeplink/compose?to=${encodeURIComponent(
             comm.recipientEmail
@@ -732,14 +722,12 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
 
                   {!user && (
                     <a
-                      href={gmailHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href={mailtoHref}
                       className="flex items-center gap-1.5 py-1.5 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl border border-slate-200 transition-colors"
-                      title="Open in Gmail web composer"
+                      title="Open in your default mail app"
                     >
                       <Globe className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Gmail Web</span>
+                      <span>Mail App</span>
                     </a>
                   )}
 
@@ -761,18 +749,18 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
                     <>
                       <button
                         type="button"
-                        onClick={() => handleDraftDirectGmail(comm)}
+                        onClick={() => handleDraftToAccount(comm)}
                         disabled={sendingId === comm.id}
                         className="flex items-center gap-1.5 py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-semibold rounded-xl border border-amber-200 transition-colors cursor-pointer"
-                        title="Create draft in your connected Gmail account"
+                        title="Create draft in your connected email account"
                       >
                         <Mail className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Draft to Gmail</span>
+                        <span>Save Draft</span>
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => handleSendDirectGmail(comm)}
+                        onClick={() => handleSendFromAccount(comm)}
                         disabled={sendingId === comm.id}
                         className={`flex items-center gap-1.5 py-2 px-4 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer ${
                           isDelivered
@@ -783,17 +771,17 @@ export const CommunicationsHub: React.FC<CommunicationsHubProps> = ({
                         {sendingId === comm.id ? (
                           <>
                             <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            <span>Sending via Gmail...</span>
+                            <span>Sending...</span>
                           </>
                         ) : isDelivered ? (
                           <>
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Resend via Gmail</span>
+                            <span>Resend</span>
                           </>
                         ) : (
                           <>
                             <Send className="w-3.5 h-3.5 fill-current" />
-                            <span>Send via Gmail</span>
+                            <span>Send from My Email</span>
                           </>
                         )}
                       </button>

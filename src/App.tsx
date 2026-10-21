@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { User } from "firebase/auth";
 import { Header } from "./components/Header.tsx";
 import { AudioRecorder } from "./components/AudioRecorder.tsx";
 import { MeetingNotesView } from "./components/MeetingNotesView.tsx";
 import { CommunicationsHub } from "./components/CommunicationsHub.tsx";
 import { DatabaseView } from "./components/DatabaseView.tsx";
-import { GoogleWorkspaceHub } from "./components/GoogleWorkspaceHub.tsx";
+import { WorkspaceHub } from "./components/WorkspaceHub.tsx";
 import {
   WorkspaceConfirmModal,
   WorkspaceConfirmAction,
@@ -14,13 +13,7 @@ import { DealMemoPrintModal } from "./components/DealMemoPrintModal.tsx";
 import { QuickBrokerCockpit } from "./components/QuickBrokerCockpit.tsx";
 import { PreMeetingDossierView } from "./components/PreMeetingDossierView.tsx";
 import { ExternalIntelModal } from "./components/ExternalIntelModal.tsx";
-import {
-  initAuth,
-  googleSignIn,
-  googleSignOut,
-} from "./services/googleAuth.ts";
-import { uploadDealNoteToDrive } from "./services/driveService.ts";
-import { createCalendarEvent } from "./services/calendarService.ts";
+import { workspace, ProviderAccount } from "./providers/index.ts";
 import {
   DealAnalysisResult,
   Contact,
@@ -67,9 +60,8 @@ export default function App() {
   const [isExternalIntelOpen, setIsExternalIntelOpen] = useState(false);
   const [externalIntelQuery, setExternalIntelQuery] = useState("1420 Market Street, San Francisco, CA");
 
-  // Google Workspace Auth State
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  // Connected calendar & email account (provider-neutral)
+  const [user, setUser] = useState<ProviderAccount | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
   const [confirmAction, setConfirmAction] = useState<WorkspaceConfirmAction | null>(null);
 
@@ -95,46 +87,28 @@ export default function App() {
     setTimeout(() => setNotification(null), 4500);
   };
 
-  // Listen to Google Workspace Auth state
-  useEffect(() => {
-    const unsubscribe = initAuth(
-      (usr, tok) => {
-        setUser(usr);
-        setToken(tok);
-      },
-      () => {
-        setUser(null);
-        setToken(null);
-      }
-    );
-    return () => {
-      if (typeof unsubscribe === "function") unsubscribe();
-    };
-  }, []);
+  // Listen to the connected account
+  useEffect(() => workspace.onAccountChange(setUser), []);
 
-  const handleGoogleSignIn = async () => {
+  const handleConnectAccount = async () => {
     setIsLoggingIn(true);
     try {
-      const res = await googleSignIn();
-      if (res) {
-        setUser(res.user);
-        setToken(res.accessToken);
-        showNotification(`Signed in to Google Workspace as ${res.user.email}`);
-      }
+      const account = await workspace.connect();
+      setUser(account);
+      showNotification(`Connected ${account.email || account.name}`);
     } catch (err: any) {
-      console.error("Google sign in error:", err);
-      alert(`Google Sign-In Error: ${err.message || err}`);
+      console.error("Account connection error:", err);
+      alert(`Could not connect your account: ${err.message || err}`);
     } finally {
       setIsLoggingIn(false);
     }
   };
 
-  const handleGoogleSignOut = async () => {
+  const handleDisconnectAccount = async () => {
     try {
-      await googleSignOut();
+      await workspace.disconnect();
       setUser(null);
-      setToken(null);
-      showNotification("Signed out of Google Workspace");
+      showNotification("Disconnected calendar & email account");
     } catch (err) {
       console.error("Sign out error:", err);
     }
@@ -325,18 +299,18 @@ export default function App() {
     }
     setAnalysisResult({ ...analysisResult, communications: updatedComms });
 
-    // 2. Schedule calendar event if Google Workspace connected
+    // 2. Schedule calendar event if a calendar account is connected
     if (user) {
       try {
         const today = new Date();
         today.setDate(today.getDate() + 3);
         const startISO = new Date(today.setHours(14, 0, 0, 0)).toISOString();
         const endISO = new Date(today.setHours(15, 0, 0, 0)).toISOString();
-        await createCalendarEvent({
-          summary: `Milestone: Earnest Money Wire Due (${analysisResult.dealName})`,
+        await workspace.calendar.createEvent({
+          title: `Milestone: Earnest Money Wire Due (${analysisResult.dealName})`,
           description: `Automated next-step: Verify earnest deposit wired to Escrow (Sarah Chen). EMD: ${analysisResult.financialTerms.earnestMoneyDeposit}`,
-          startDateTime: startISO,
-          endDateTime: endISO,
+          start: startISO,
+          end: endISO,
           location: analysisResult.matchedListing?.address || "Escrow Office",
         });
       } catch (calErr) {
@@ -359,12 +333,12 @@ export default function App() {
     );
   };
 
-  // Save active deal to Google Drive with explicit confirmation
+  // Save active deal to cloud files with explicit confirmation
   const handleSaveActiveDealToDrive = () => {
     if (!analysisResult) return;
     if (!user) {
       setCurrentTab("workspace");
-      showNotification("Please connect Google Workspace to save directly to Google Drive");
+      showNotification("Connect your account to save briefs to your cloud files");
       return;
     }
 
@@ -395,21 +369,22 @@ export default function App() {
     ].join("\n");
 
     setConfirmAction({
-      type: "drive_upload",
-      title: "Save Brief to Google Drive",
-      description: "Upload a complete markdown briefing document to your Google Drive root folder.",
+      type: "file_upload",
+      title: "Save Brief to Cloud Files",
+      description: "Upload a complete markdown briefing document to your connected file storage.",
       details: [
-        { label: "Account", value: user.email || "Connected Google Workspace" },
+        { label: "Account", value: user.email || user.name },
         { label: "File Name", value: `${filename}.md` },
         { label: "Deal", value: analysisResult.dealName },
       ],
       onConfirm: async () => {
         try {
-          await uploadDealNoteToDrive(filename, markdownContent, analysisResult.dealName);
-          showNotification(`Saved "${filename}.md" to Google Drive`);
+          if (!workspace.files) throw new Error("Your connected account does not support file storage.");
+          await workspace.files.uploadNote(filename, markdownContent, analysisResult.dealName);
+          showNotification(`Saved "${filename}.md" to your files`);
           setConfirmAction(null);
         } catch (err: any) {
-          alert(`Google Drive Upload Error: ${err.message}`);
+          alert(`File upload error: ${err.message}`);
           setConfirmAction(null);
         }
       },
@@ -421,7 +396,7 @@ export default function App() {
   const handleScheduleCalendarFromNotes = (taskTitle?: string, deadline?: string) => {
     if (!user) {
       setCurrentTab("workspace");
-      showNotification("Please connect Google Workspace to schedule events on Google Calendar");
+      showNotification("Connect your calendar account to schedule events");
       return;
     }
 
@@ -433,27 +408,27 @@ export default function App() {
 
     setConfirmAction({
       type: "calendar_event",
-      title: "Schedule on Google Calendar",
-      description: "Create an official milestone event in your Google Calendar.",
+      title: "Schedule on Calendar",
+      description: "Create a milestone event in your connected calendar.",
       details: [
-        { label: "Account", value: user.email || "Connected Google Workspace" },
+        { label: "Account", value: user.email || user.name },
         { label: "Event Title", value: title },
         { label: "Target Deadline", value: deadline || "Tomorrow 10:00 AM" },
         { label: "Deal", value: analysisResult?.dealName || "Broker Buddy Deal" },
       ],
       onConfirm: async () => {
         try {
-          await createCalendarEvent({
-            summary: title,
+          await workspace.calendar.createEvent({
+            title,
             description: `Broker Buddy action item: ${title}\nDeal: ${analysisResult?.dealName || ""}\nDeadline: ${deadline || ""}`,
-            startDateTime: startISO,
-            endDateTime: endISO,
+            start: startISO,
+            end: endISO,
             location: analysisResult?.matchedListing?.address || "CBRE Office / Virtual",
           });
-          showNotification(`Scheduled "${title}" on Google Calendar`);
+          showNotification(`Scheduled "${title}" on your calendar`);
           setConfirmAction(null);
         } catch (err: any) {
-          alert(`Google Calendar API Error: ${err.message}`);
+          alert(`Calendar error: ${err.message}`);
           setConfirmAction(null);
         }
       },
@@ -540,7 +515,7 @@ export default function App() {
         totalContactsCount={contacts.length}
         hasActiveDeal={Boolean(analysisResult)}
         user={user}
-        onSignIn={handleGoogleSignIn}
+        onSignIn={handleConnectAccount}
         isLoggingIn={isLoggingIn}
         speedMode={speedMode}
         onToggleSpeedMode={setSpeedMode}
@@ -678,11 +653,10 @@ export default function App() {
         )}
 
         {currentTab === "workspace" && (
-          <GoogleWorkspaceHub
+          <WorkspaceHub
             user={user}
-            token={token}
-            onSignIn={handleGoogleSignIn}
-            onSignOut={handleGoogleSignOut}
+            onSignIn={handleConnectAccount}
+            onSignOut={handleDisconnectAccount}
             isLoggingIn={isLoggingIn}
             onRequestConfirm={(act) => setConfirmAction(act)}
             showNotification={showNotification}
@@ -733,7 +707,7 @@ export default function App() {
           <div className="flex items-center gap-3 text-slate-500">
             <span>Powered by Claude</span>
             <span>·</span>
-            <span>Google Workspace 1P API</span>
+            <span>{user ? "Calendar & Email Connected" : "Calendar & Email Not Connected"}</span>
             <span>·</span>
             <span>CBRE Database Active</span>
           </div>

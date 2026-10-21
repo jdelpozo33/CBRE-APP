@@ -1,5 +1,5 @@
 import React from "react";
-import { User } from "firebase/auth";
+import type { ProviderAccount } from "../providers/index.ts";
 import {
   Building2,
   Mic,
@@ -20,7 +20,7 @@ interface HeaderProps {
   pendingCommsCount: number;
   totalContactsCount: number;
   hasActiveDeal: boolean;
-  user?: User | null;
+  user?: ProviderAccount | null;
   onSignIn?: () => void;
   isLoggingIn?: boolean;
   speedMode?: "turbo" | "balanced";
@@ -135,8 +135,8 @@ export const Header: React.FC<HeaderProps> = ({
                 <Calendar className="w-3 h-3 text-sky-500" />
                 <HardDrive className="w-3 h-3 text-amber-500" />
               </div>
-              <span className="hidden sm:inline">Google Workspace</span>
-              <span className="sm:hidden">Workspace</span>
+              <span className="hidden sm:inline">Connections</span>
+              <span className="sm:hidden">Connect</span>
               {user && (
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               )}
@@ -183,19 +183,19 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <div className="text-right">
                   <div className="text-[11px] font-bold text-slate-800 truncate max-w-[120px]">
-                    {user.displayName || "Connected"}
+                    {user.name || "Connected"}
                   </div>
                   <div className="text-[10px] text-emerald-600 font-semibold">Active</div>
                 </div>
-                {user.photoURL ? (
+                {user.photoUrl ? (
                   <img
-                    src={user.photoURL}
+                    src={user.photoUrl}
                     alt="User"
                     className="w-7 h-7 rounded-lg border border-emerald-300"
                   />
                 ) : (
                   <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white font-bold flex items-center justify-center text-xs">
-                    G
+                    {(user.name || user.email || "?").charAt(0).toUpperCase()}
                   </div>
                 )}
               </button>
@@ -207,7 +207,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span>{isLoggingIn ? "Connecting..." : "Sign in with Google"}</span>
+                <span>{isLoggingIn ? "Connecting..." : "Connect calendar & email"}</span>
               </button>
             ) : null}
           </div>

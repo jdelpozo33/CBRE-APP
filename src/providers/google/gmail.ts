@@ -1,4 +1,4 @@
-import { getAccessToken } from './googleAuth.ts';
+import { getAccessToken } from './auth.ts';
 
 export interface GmailMessagePreview {
   id: string;

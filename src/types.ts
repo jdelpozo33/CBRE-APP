@@ -1,3 +1,6 @@
+// Where a record came from; shown as a label on search results and lists.
+export type DataSource = 'Email' | 'Call' | 'Note' | 'Calendar' | 'External' | 'CRM';
+
 export interface Contact {
   id: string;
   name: string;
@@ -7,6 +10,7 @@ export interface Contact {
   phone: string;
   notes: string;
   preferredChannel: 'email' | 'sms' | 'phone';
+  source?: DataSource;
 }
 
 export interface ListingProperty {
@@ -25,6 +29,7 @@ export interface ListingProperty {
   status: 'Active Listing' | 'Under Contract' | 'Off-Market Pocket' | 'Sold';
   ownerContactId?: string;
   summary: string;
+  source?: DataSource;
 }
 
 export interface MarketComp {
@@ -36,6 +41,7 @@ export interface MarketComp {
   pricePerSqFt: number;
   capRate: number;
   closedDate: string;
+  source?: DataSource;
 }
 
 export interface DispatchedMessage {
@@ -48,6 +54,7 @@ export interface DispatchedMessage {
   status: 'Delivered' | 'Sent' | 'Draft';
   timestamp: string;
   dealReference?: string;
+  source?: DataSource;
 }
 
 export interface QuickActivityLog {
@@ -60,6 +67,7 @@ export interface QuickActivityLog {
   notes: string;
   timestamp: string;
   followUpDate?: string;
+  source?: DataSource;
 }
 
 export interface FinancialTerms {
