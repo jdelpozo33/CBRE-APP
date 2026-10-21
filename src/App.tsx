@@ -7,6 +7,7 @@ import { DatabaseView } from "./components/DatabaseView.tsx";
 import { WorkspaceHub } from "./components/WorkspaceHub.tsx";
 import { HomeView } from "./components/HomeView.tsx";
 import { UpcomingMeetings } from "./components/UpcomingMeetings.tsx";
+import { GlobalSearch } from "./components/GlobalSearch.tsx";
 import { useUpcomingMeetings, UpcomingMeeting, findActiveMeeting } from "./hooks/useUpcomingMeetings.ts";
 import { MeetingBriefingView, isBriefingSection } from "./components/MeetingBriefingView.tsx";
 import {
@@ -601,6 +602,16 @@ export default function App() {
         {currentTab === "home" && (
           <HomeView
             activityLogs={activityLogs}
+            search={
+              <GlobalSearch
+                user={user}
+                meetings={upcoming.meetings}
+                listings={listings}
+                onOpenMeeting={handleOpenBriefing}
+                onOpenRecord={() => setCurrentTab("database")}
+                onSearchWeb={handleOpenExternalIntel}
+              />
+            }
             upcomingMeetings={
               <UpcomingMeetings
                 meetings={upcoming.meetings}

@@ -133,3 +133,12 @@ backfillSource("messages", () => "Email");
 backfillSource<WithId & { source?: string; type?: string }>("activity_logs", (log) =>
   log.type === "call" ? "Call" : "Note"
 );
+
+// Deal stage for properties created before stages existed, derived from listing status.
+for (const listing of listRecords<WithId & { status?: string; dealStage?: string }>("listings")) {
+  if (!listing.dealStage) {
+    const dealStage =
+      listing.status === "Off-Market Pocket" ? "Lead" : listing.status === "Sold" ? "Closed" : "In progress";
+    updateRecord<WithId & { dealStage?: string }>("listings", listing.id, { dealStage });
+  }
+}

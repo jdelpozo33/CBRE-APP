@@ -95,9 +95,77 @@ apiApp.post("/api/listings", (req: Request, res: Response) => {
     status: req.body.status || "Active Listing",
     summary: req.body.summary || "",
     source: "CRM",
+    dealStage: req.body.dealStage || "New deal",
   };
   insertRecord("listings", newListing);
   res.json({ success: true, listing: newListing });
+});
+
+// --- Global search across CRM, calls, notes, emails and market comps ---
+// Every result carries its source; property results also carry their deal stage.
+apiApp.get("/api/search", (req: Request, res: Response) => {
+  const q = String(req.query.q || "").trim().toLowerCase();
+  if (!q) return res.json({ results: [] });
+  const tokens = q.split(/\s+/).filter(Boolean);
+  const matches = (...fields: (string | undefined)[]) => {
+    const haystack = fields.filter(Boolean).join(" ").toLowerCase();
+    return tokens.every((t) => haystack.includes(t));
+  };
+
+  const results: any[] = [];
+  for (const l of getListings()) {
+    if (matches(l.title, l.address, l.city, l.propertyType, l.summary)) {
+      results.push({
+        id: l.id,
+        kind: "property",
+        title: l.title,
+        subtitle: `${l.address}, ${l.city} · ${l.propertyType}`,
+        source: l.source || "CRM",
+        dealStage: l.dealStage,
+      });
+    }
+  }
+  for (const c of getContacts()) {
+    if (matches(c.name, c.company, c.role, c.email, c.notes)) {
+      results.push({ id: c.id, kind: "contact", title: c.name, subtitle: `${c.role} · ${c.company}`, source: c.source || "CRM" });
+    }
+  }
+  for (const log of listRecords<QuickActivityLog>("activity_logs")) {
+    if (matches(log.title, log.entityName, log.propertyOrContext, log.notes, (log.tags || []).join(" "))) {
+      results.push({
+        id: log.id,
+        kind: log.type === "call" ? "call" : "note",
+        title: log.title,
+        subtitle: [log.entityName, log.notes].filter(Boolean).join(" · "),
+        source: log.source || (log.type === "call" ? "Call" : "Note"),
+        date: log.occurredAt || log.timestamp,
+      });
+    }
+  }
+  for (const m of listRecords<DispatchedMessage>("messages")) {
+    if (matches(m.subject, m.recipientName, m.recipientEmail, m.body, m.dealReference)) {
+      results.push({
+        id: m.id,
+        kind: "email",
+        title: m.subject,
+        subtitle: `To ${m.recipientName}`,
+        source: m.source || "Email",
+        date: m.timestamp,
+      });
+    }
+  }
+  for (const comp of getComps()) {
+    if (matches(comp.address, comp.propertyType)) {
+      results.push({
+        id: comp.id,
+        kind: "comp",
+        title: comp.address,
+        subtitle: `Sold $${(comp.salePrice / 1_000_000).toFixed(1)}M · ${comp.capRate}% cap · ${comp.closedDate}`,
+        source: comp.source || "External",
+      });
+    }
+  }
+  res.json({ results: results.slice(0, 40) });
 });
 
 // --- Upcoming meeting snapshots (counterparty, top comps, property) from CRM data ---

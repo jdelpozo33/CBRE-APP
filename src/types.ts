@@ -1,6 +1,9 @@
 // Where a record came from; shown as a label on search results and lists.
 export type DataSource = 'Email' | 'Call' | 'Note' | 'Calendar' | 'External' | 'CRM';
 
+// Where a property deal stands, shown on search results.
+export type DealStage = 'New deal' | 'Lead' | 'In progress' | 'Closed';
+
 export interface Contact {
   id: string;
   name: string;
@@ -30,6 +33,7 @@ export interface ListingProperty {
   ownerContactId?: string;
   summary: string;
   source?: DataSource;
+  dealStage?: DealStage;
 }
 
 export interface MarketComp {
