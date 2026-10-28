@@ -1,0 +1,26 @@
+# One-click deploy on Render (https://render.com): New > Blueprint > pick this repo.
+# The disk keeps the SQLite database between deploys and restarts.
+services:
+  - type: web
+    name: broker-buddy
+    runtime: node
+    plan: starter
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/settings
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.0
+      - key: DATABASE_PATH
+        value: /var/data/dealpulse.db
+      # Secrets and optional provider keys: Render asks for these when you create the Blueprint.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: VITE_MICROSOFT_CLIENT_ID
+        sync: false
+      - key: VITE_DROPBOX_APP_KEY
+        sync: false
+    disk:
+      name: broker-buddy-data
+      mountPath: /var/data
+      sizeGB: 1
