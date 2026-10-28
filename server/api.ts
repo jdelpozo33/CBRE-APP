@@ -503,7 +503,7 @@ Respond ONLY in valid JSON matching this structure:
     "dueDiligenceDays": string,
     "closingTimeline": string,
     "financingStructure": string
-  },
+  },  // each financialTerms value is a short figure or phrase for a summary tile (e.g. "$14.2M", "6.35%", "30 days"); put caveats in keyDiscussionPoints
   "keyDiscussionPoints": string[],
   "sentimentAndLeverage": {
     "urgency": "High" | "Moderate" | "Low",
@@ -605,9 +605,10 @@ Summarize key actionable findings for a commercial broker in 3 crisp bullet poin
       executeClaudeCall(webSearchPrompt, {
         speedMode: speedMode as "turbo" | "balanced",
         webSearch: true,
-        timeoutMs: 30000,
+        maxSearches: 4,
+        timeoutMs: 90000,
       }),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000)),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 90000)),
     ]).catch((err) => {
       console.warn("Parallel web research notice (using cached benchmark data):", err?.message);
       return null;
@@ -1023,9 +1024,10 @@ Provide 3 crisp bullet points.`;
       executeClaudeCall(webPrompt, {
         speedMode: speedMode as "turbo" | "balanced",
         webSearch: true,
-        timeoutMs: 30000,
+        maxSearches: 4,
+        timeoutMs: 90000,
       }),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000)),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 90000)),
     ]).catch((err) => {
       console.warn("Pre-meeting web grounding notice:", err?.message);
       return null;
